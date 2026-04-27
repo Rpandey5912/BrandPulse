@@ -4,19 +4,16 @@ import { BarChart3, Menu, X } from "lucide-react";
 import { useState } from "react";
 
 export default function LandingNav() {
-  const [mobileOpen, setMobileOpen] = useState<boolean>(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <nav className="sticky top-0 z-50 bg-[rgb(246,246,249)] backdrop-blur-xl border-b">
+    <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2.5">
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center"
-            style={{ background: "var(--primary)" }}
-          >
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
             <BarChart3 className="w-5 h-5 text-white" />
           </div>
-          <span className="font-heading font-extrabold text-xl tracking-tight ">
+          <span className="font-heading font-extrabold text-xl tracking-tight">
             BrandPulse
           </span>
         </Link>
@@ -48,7 +45,7 @@ export default function LandingNav() {
               View Demo
             </Button>
           </Link>
-          <Link to="/dashboard">
+          <Link to="/signin">
             <Button variant="ghost" size="sm" className="rounded-lg">
               Sign In
             </Button>
@@ -56,7 +53,7 @@ export default function LandingNav() {
           <Link to="/register">
             <Button
               size="sm"
-              className="rounded-lg bg-primary text-white hover:opacity-90"
+              className="rounded-lg bg-gradient-to-r from-primary to-accent hover:opacity-90"
             >
               Get Started
             </Button>
@@ -66,7 +63,6 @@ export default function LandingNav() {
         <button
           className="md:hidden"
           onClick={() => setMobileOpen(!mobileOpen)}
-          aria-label={mobileOpen ? "Close menu" : "Open menu"}
         >
           {mobileOpen ? (
             <X className="w-6 h-6" />
@@ -100,7 +96,7 @@ export default function LandingNav() {
             Influencers
           </Link>
           <div className="flex gap-3 pt-2">
-            <Link to="/dashboard" className="flex-1">
+            <Link to="/signin" className="flex-1">
               <Button variant="outline" className="w-full rounded-lg">
                 Sign In
               </Button>

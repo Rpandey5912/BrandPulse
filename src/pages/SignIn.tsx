@@ -37,6 +37,12 @@ const VALID_CREDENTIALS = [
     role: "client",
     name: "Test Client",
   },
+  {
+    email: "john@example.com",
+    password: "password123",
+    role: "client",
+    name: "John Doe",
+  },
 ];
 
 // Store current user session in memory
@@ -362,6 +368,13 @@ export default function SignIn() {
           </p>
         </div>
       </div>
+
+      {/* Optional: Display debug info in development */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="fixed bottom-4 right-4 p-2 bg-black/80 text-white text-xs rounded-lg">
+          Demo Credentials: demo@brandpulse.io / BrandPulse2024!
+        </div>
+      )}
     </div>
   );
 }

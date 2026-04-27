@@ -14,38 +14,20 @@ import {
   Shield,
   Globe,
   UserCircle,
-  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-interface NavLink {
-  to: string;
-  label: string;
-  icon: LucideIcon;
-}
-
 interface User {
-  role?: string;
-  full_name?: string;
-  email?: string;
+  id: string;
+  full_name: string;
+  email: string;
+  role: "admin" | "client";
+  company_name?: string;
+  phone?: string;
 }
 
-// Mock user data
-const MOCK_USER: User = {
-  role: "admin", // Change to "client" for client view
-  full_name: "John Admin",
-  email: "admin@brandpulse.com",
-};
-
-// Alternative client user for testing
-const MOCK_CLIENT_USER: User = {
-  role: "client",
-  full_name: "Sarah Client",
-  email: "client@brandpulse.com",
-};
-
-const clientLinks: NavLink[] = [
+const clientLinks = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/campaigns", label: "Campaigns", icon: Megaphone },
   { to: "/influencers", label: "Influencers", icon: Users },
@@ -54,36 +36,70 @@ const clientLinks: NavLink[] = [
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
-const adminLinks: NavLink[] = [
+const adminLinks = [
   { to: "/admin", label: "Admin Dashboard", icon: Shield },
   { to: "/admin/clients", label: "Manage Clients", icon: Users },
   { to: "/admin/influencers", label: "Influencers", icon: Globe },
   { to: "/admin/reports", label: "All Reports", icon: FileText },
+  { to: "/admin/users", label: "User Management", icon: UserCircle },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
+// Mock user data based on role
+const MOCK_CLIENT_USER: User = {
+  id: "1",
+  full_name: "John Client",
+  email: "john.client@brandpulse.com",
+  role: "client",
+  company_name: "TechCorp Solutions",
+  phone: "+1 (555) 123-4567",
+};
+
+const MOCK_ADMIN_USER: User = {
+  id: "2",
+  full_name: "Sarah Admin",
+  email: "sarah.admin@brandpulse.com",
+  role: "admin",
+  company_name: "BrandPulse",
+  phone: "+1 (555) 987-6543",
+};
+
 export default function DashboardLayout() {
-  const [collapsed, setCollapsed] = useState<boolean>(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
   const location = useLocation();
   const navigate = useNavigate();
 
   useEffect(() => {
     // Simulate API call to get current user
     const loadUser = async () => {
-      // Simulate network delay
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // You can switch between admin and client by changing which user you return
-      // For demo purposes, let's check localStorage or use a default
-      const savedRole = localStorage.getItem("userRole");
+      // Get user role from localStorage (set during login)
+      const userRole = localStorage.getItem("userRole");
+      const userEmail = localStorage.getItem("userEmail");
+      const userName = localStorage.getItem("userName");
+      const isAuthenticated =
+        localStorage.getItem("isAuthenticated") === "true";
 
-      if (savedRole === "client") {
-        setUser(MOCK_CLIENT_USER);
+      if (isAuthenticated && userRole) {
+        if (userRole === "admin") {
+          setUser({
+            ...MOCK_ADMIN_USER,
+            email: userEmail || MOCK_ADMIN_USER.email,
+            full_name: userName || MOCK_ADMIN_USER.full_name,
+          });
+        } else {
+          setUser({
+            ...MOCK_CLIENT_USER,
+            email: userEmail || MOCK_CLIENT_USER.email,
+            full_name: userName || MOCK_CLIENT_USER.full_name,
+          });
+        }
       } else {
-        // Default to admin
-        setUser(MOCK_USER);
+        // Default to client view for demo
+        setUser(MOCK_CLIENT_USER);
       }
 
       setLoading(false);
@@ -93,7 +109,7 @@ export default function DashboardLayout() {
   }, []);
 
   const isAdmin = user?.role === "admin";
-  const links: NavLink[] = isAdmin ? adminLinks : clientLinks;
+  const links = isAdmin ? adminLinks : clientLinks;
   const initials =
     user?.full_name
       ?.split(" ")
@@ -102,26 +118,20 @@ export default function DashboardLayout() {
       .toUpperCase() || "U";
 
   const handleLogout = () => {
-    // Clear any stored user data
+    // Clear localStorage
     localStorage.removeItem("userRole");
+    localStorage.removeItem("userEmail");
+    localStorage.removeItem("userName");
+    localStorage.removeItem("isAuthenticated");
+    localStorage.removeItem("pendingClientId");
+
     // Navigate to home page
     navigate("/");
   };
 
-  // Function to switch between admin and client for demo purposes
-  const toggleUserRole = () => {
-    if (user?.role === "admin") {
-      localStorage.setItem("userRole", "client");
-      setUser(MOCK_CLIENT_USER);
-    } else {
-      localStorage.setItem("userRole", "admin");
-      setUser(MOCK_USER);
-    }
-  };
-
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-screen items-center justify-center">
         <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
       </div>
     );
@@ -135,7 +145,7 @@ export default function DashboardLayout() {
       >
         <div className="h-16 flex items-center px-4 border-b">
           <Link to="/" className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shrink-0">
               <BarChart3 className="w-5 h-5 text-white" />
             </div>
             {!collapsed && (
@@ -167,19 +177,6 @@ export default function DashboardLayout() {
         </nav>
 
         <div className="border-t p-3 space-y-2">
-          {/* Demo role switcher - remove in production */}
-          <button
-            onClick={toggleUserRole}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs text-muted-foreground hover:bg-muted transition-colors mb-2"
-          >
-            <UserCircle className="w-4 h-4" />
-            {!collapsed && (
-              <span>
-                Switch to {user?.role === "admin" ? "Client" : "Admin"} View
-              </span>
-            )}
-          </button>
-
           <button
             onClick={() => setCollapsed(!collapsed)}
             className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm text-muted-foreground hover:bg-muted transition-colors"
@@ -206,7 +203,7 @@ export default function DashboardLayout() {
                 <p className="text-xs text-muted-foreground truncate">
                   {user?.email}
                 </p>
-                <p className="text-xs text-primary mt-0.5 capitalize">
+                <p className="text-xs text-primary capitalize mt-0.5">
                   {user?.role}
                 </p>
               </div>
@@ -263,6 +260,13 @@ export default function DashboardLayout() {
           );
         })}
       </div>
+
+      {/* Optional: Demo role indicator */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="fixed bottom-4 left-4 z-50 px-2 py-1 bg-black/80 text-white text-xs rounded-md">
+          {user?.role === "admin" ? "👑 Admin Mode" : "👤 Client Mode"}
+        </div>
+      )}
     </div>
   );
 }
