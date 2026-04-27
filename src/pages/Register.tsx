@@ -1,4 +1,6 @@
-import { useState, type FormEvent, type ChangeEvent } from "react";
+import { useState } from "react";
+import { useFormik } from "formik";
+import * as Yup from "yup";
 import { useNavigate, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,8 +12,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { BarChart3, ArrowLeft, Check } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { BarChart3, ArrowLeft, Check, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 const industries = [
@@ -38,18 +46,6 @@ const planDetails = {
   },
 };
 
-interface FormData {
-  company_name: string;
-  contact_name: string;
-  email: string;
-  phone: string;
-  industry: string;
-  website: string;
-  subscription_plan: string;
-  social_platforms: string[];
-}
-
-// Store clients in memory (simulating database)
 interface StoredClient {
   id: string;
   company_name: string;
@@ -67,81 +63,157 @@ interface StoredClient {
   created_date: string;
 }
 
+interface FormValues {
+  company_name: string;
+  contact_name: string;
+  email: string;
+  phone: string;
+  industry: string;
+  website: string;
+  subscription_plan: string;
+  social_platforms: string[];
+}
+
 let registeredClients: StoredClient[] = [];
+
+const validationSchema = Yup.object({
+  company_name: Yup.string()
+    .min(2, "Company name must be at least 2 characters")
+    .required("Company name is required"),
+  contact_name: Yup.string()
+    .min(2, "Contact name must be at least 2 characters")
+    .required("Contact name is required"),
+  email: Yup.string()
+    .email("Please enter a valid email address")
+    .required("Email is required"),
+  phone: Yup.string().test(
+    "phone-optional",
+    "Please enter a valid phone number",
+    (value) => {
+      if (!value || value.trim() === "") return true;
+      return /^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]{6,14}$/.test(value);
+    },
+  ),
+  industry: Yup.string(),
+  website: Yup.string().test(
+    "website-optional",
+    "Please enter a valid URL (e.g. https://acme.com)",
+    (value) => {
+      if (!value || value.trim() === "") return true;
+      try {
+        new URL(value);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  ),
+  subscription_plan: Yup.string()
+    .oneOf(["trial", "silver", "gold", "platinum"])
+    .required("Please select a plan"),
+  social_platforms: Yup.array()
+    .of(Yup.string().required())
+    .min(1, "Please select at least one platform"),
+});
+
+// ── Summary row component used inside the modal ───────────────────────────
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-3 py-2.5 border-b border-muted last:border-0">
+      <span className="w-36 shrink-0 text-xs font-medium text-muted-foreground uppercase tracking-wide pt-0.5">
+        {label}
+      </span>
+      <span className="text-sm text-foreground break-all">{value || "—"}</span>
+    </div>
+  );
+}
 
 export default function Register() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState<FormData>({
-    company_name: "",
-    contact_name: "",
-    email: "",
-    phone: "",
-    industry: "",
-    website: "",
-    subscription_plan: "trial",
-    social_platforms: [],
+  const [showModal, setShowModal] = useState(false);
+  const [submittedData, setSubmittedData] = useState<FormValues | null>(null);
+
+  const formik = useFormik<FormValues>({
+    initialValues: {
+      company_name: "",
+      contact_name: "",
+      email: "",
+      phone: "",
+      industry: "",
+      website: "",
+      subscription_plan: "trial",
+      social_platforms: [],
+    },
+    validationSchema,
+    onSubmit: async (values, { setSubmitting }) => {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      setSubmitting(false);
+      // Save data and open modal — navigation happens from modal confirm button
+      setSubmittedData(values);
+      setShowModal(true);
+    },
   });
 
-  const handlePlatformToggle = (platform: string): void => {
-    setForm((prev) => ({
-      ...prev,
-      social_platforms: prev.social_platforms.includes(platform)
-        ? prev.social_platforms.filter((p) => p !== platform)
-        : [...prev.social_platforms, platform],
-    }));
-  };
-
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
-    e.preventDefault();
-    setLoading(true);
-
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+  const handleConfirm = async () => {
+    if (!submittedData) return;
+    setShowModal(false);
 
     const now = new Date().toISOString();
     const endDate = new Date();
-    if (form.subscription_plan === "trial") {
+    if (submittedData.subscription_plan === "trial") {
       endDate.setMonth(endDate.getMonth() + 3);
     } else {
       endDate.setMonth(endDate.getMonth() + 1);
     }
 
-    // Create new client
     const newClient: StoredClient = {
       id: Math.random().toString(36).substr(2, 9),
-      ...form,
+      ...submittedData,
       subscription_status:
-        form.subscription_plan === "trial" ? "active" : "pending_payment",
+        submittedData.subscription_plan === "trial"
+          ? "active"
+          : "pending_payment",
       instance_status:
-        form.subscription_plan === "trial" ? "active" : "pending",
+        submittedData.subscription_plan === "trial" ? "active" : "pending",
       subscription_start_date: now,
       subscription_end_date: endDate.toISOString(),
       created_date: now,
     };
 
-    // Store in memory
     registeredClients.push(newClient);
     console.log("New client registered:", newClient);
-    console.log("Total clients:", registeredClients.length);
 
-    setLoading(false);
-
-    if (form.subscription_plan === "trial") {
+    if (submittedData.subscription_plan === "trial") {
       toast({
         title: "Welcome to BrandPulse!",
         description: "Your 3-month free trial has started.",
       });
       navigate("/dashboard");
     } else {
-      // Store client ID in session storage for payment page
       sessionStorage.setItem("pendingClientId", newClient.id);
       navigate(
-        `/payment?plan=${form.subscription_plan}&client_id=${newClient.id}`,
+        `/payment?plan=${submittedData.subscription_plan}&client_id=${newClient.id}`,
       );
     }
   };
+
+  const handlePlatformToggle = (platform: string) => {
+    const current = formik.values.social_platforms;
+    const updated = current.includes(platform)
+      ? current.filter((p) => p !== platform)
+      : [...current, platform];
+    formik.setFieldValue("social_platforms", updated);
+    formik.setFieldTouched("social_platforms", true, false);
+  };
+
+  const fieldError = (name: keyof FormValues) =>
+    formik.touched[name] && formik.errors[name]
+      ? String(formik.errors[name])
+      : null;
+
+  const selectedPlan =
+    planDetails[submittedData?.subscription_plan as keyof typeof planDetails];
 
   return (
     <div className="min-h-screen bg-background">
@@ -165,7 +237,7 @@ export default function Register() {
           Create your account and start tracking your brand performance.
         </p>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form onSubmit={formik.handleSubmit} className="space-y-8">
           {/* Plan Selection */}
           <div>
             <Label className="text-base font-heading font-bold mb-3 block">
@@ -176,16 +248,14 @@ export default function Register() {
                 <button
                   key={key}
                   type="button"
-                  onClick={() =>
-                    setForm((prev) => ({ ...prev, subscription_plan: key }))
-                  }
+                  onClick={() => formik.setFieldValue("subscription_plan", key)}
                   className={`relative text-left p-4 rounded-xl border-2 transition-all ${
-                    form.subscription_plan === key
+                    formik.values.subscription_plan === key
                       ? `${plan.color} bg-primary/5`
                       : "border-muted hover:border-muted-foreground/30"
                   }`}
                 >
-                  {form.subscription_plan === key && (
+                  {formik.values.subscription_plan === key && (
                     <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary flex items-center justify-center">
                       <Check className="w-3 h-3 text-primary-foreground" />
                     </div>
@@ -202,59 +272,80 @@ export default function Register() {
           {/* Company Info */}
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Company Name *</Label>
+              <Label htmlFor="company_name">Company Name *</Label>
               <Input
-                required
-                value={form.company_name}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setForm((prev) => ({ ...prev, company_name: e.target.value }))
-                }
+                id="company_name"
+                name="company_name"
+                value={formik.values.company_name}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
                 placeholder="Acme Inc."
-                className="rounded-xl h-11"
+                className={`rounded-xl h-11 ${fieldError("company_name") ? "border-red-500" : ""}`}
               />
+              {fieldError("company_name") && (
+                <p className="text-xs text-red-500">
+                  {fieldError("company_name")}
+                </p>
+              )}
             </div>
+
             <div className="space-y-2">
-              <Label>Contact Name *</Label>
+              <Label htmlFor="contact_name">Contact Name *</Label>
               <Input
-                required
-                value={form.contact_name}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setForm((prev) => ({ ...prev, contact_name: e.target.value }))
-                }
+                id="contact_name"
+                name="contact_name"
+                value={formik.values.contact_name}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
                 placeholder="John Doe"
-                className="rounded-xl h-11"
+                className={`rounded-xl h-11 ${fieldError("contact_name") ? "border-red-500" : ""}`}
               />
+              {fieldError("contact_name") && (
+                <p className="text-xs text-red-500">
+                  {fieldError("contact_name")}
+                </p>
+              )}
             </div>
+
             <div className="space-y-2">
-              <Label>Email *</Label>
+              <Label htmlFor="email">Email *</Label>
               <Input
-                required
+                id="email"
+                name="email"
                 type="email"
-                value={form.email}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setForm((prev) => ({ ...prev, email: e.target.value }))
-                }
+                value={formik.values.email}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
                 placeholder="john@acme.com"
-                className="rounded-xl h-11"
+                className={`rounded-xl h-11 ${fieldError("email") ? "border-red-500" : ""}`}
               />
+              {fieldError("email") && (
+                <p className="text-xs text-red-500">{fieldError("email")}</p>
+              )}
             </div>
+
             <div className="space-y-2">
-              <Label>Phone</Label>
+              <Label htmlFor="phone">Phone</Label>
               <Input
-                value={form.phone}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setForm((prev) => ({ ...prev, phone: e.target.value }))
-                }
+                id="phone"
+                name="phone"
+                value={formik.values.phone}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
                 placeholder="+1 (555) 000-0000"
-                className="rounded-xl h-11"
+                className={`rounded-xl h-11 ${fieldError("phone") ? "border-red-500" : ""}`}
               />
+              {fieldError("phone") && (
+                <p className="text-xs text-red-500">{fieldError("phone")}</p>
+              )}
             </div>
+
             <div className="space-y-2">
               <Label>Industry</Label>
               <Select
-                value={form.industry}
+                value={formik.values.industry}
                 onValueChange={(v: string) =>
-                  setForm((prev) => ({ ...prev, industry: v }))
+                  formik.setFieldValue("industry", v)
                 }
               >
                 <SelectTrigger className="rounded-xl h-11">
@@ -269,23 +360,28 @@ export default function Register() {
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-2">
-              <Label>Website</Label>
+              <Label htmlFor="website">Website</Label>
               <Input
-                value={form.website}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setForm((prev) => ({ ...prev, website: e.target.value }))
-                }
+                id="website"
+                name="website"
+                value={formik.values.website}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
                 placeholder="https://acme.com"
-                className="rounded-xl h-11"
+                className={`rounded-xl h-11 ${fieldError("website") ? "border-red-500" : ""}`}
               />
+              {fieldError("website") && (
+                <p className="text-xs text-red-500">{fieldError("website")}</p>
+              )}
             </div>
           </div>
 
           {/* Platforms */}
           <div>
             <Label className="text-base font-heading font-bold mb-3 block">
-              Social Media Platforms
+              Social Media Platforms *
             </Label>
             <div className="flex flex-wrap gap-3">
               {platforms.map((platform) => (
@@ -294,50 +390,94 @@ export default function Register() {
                   type="button"
                   onClick={() => handlePlatformToggle(platform)}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm transition-all ${
-                    form.social_platforms.includes(platform)
+                    formik.values.social_platforms.includes(platform)
                       ? "border-primary bg-primary/10 text-primary font-medium"
                       : "border-muted hover:border-muted-foreground/30"
                   }`}
                 >
-                  {form.social_platforms.includes(platform) && (
+                  {formik.values.social_platforms.includes(platform) && (
                     <Check className="w-4 h-4" />
                   )}
                   {platform}
                 </button>
               ))}
             </div>
+            {formik.touched.social_platforms &&
+              formik.errors.social_platforms && (
+                <p className="text-xs text-red-500 mt-2">
+                  {String(formik.errors.social_platforms)}
+                </p>
+              )}
           </div>
 
           <Button
             type="submit"
-            disabled={loading}
+            disabled={formik.isSubmitting}
             className="w-full h-13 rounded-xl text-base bg-gradient-to-r from-primary to-accent hover:opacity-90"
           >
-            {loading ? (
+            {formik.isSubmitting ? (
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Creating Account...
+                Processing...
               </div>
             ) : (
               "Create Account & Start Free Trial"
             )}
           </Button>
         </form>
-
-        {/* Optional: Display debug info in development */}
-        {process.env.NODE_ENV === "development" && (
-          <div className="mt-8 p-4 bg-muted rounded-xl text-xs text-muted-foreground">
-            <p className="font-medium mb-1">Debug Info:</p>
-            <p>Total registrations: {registeredClients.length}</p>
-            <p className="mt-1 text-[11px]">
-              Note: Client data is stored in memory and will reset on page
-              refresh.
-              {form.subscription_plan !== "trial" &&
-                " Paid plans will redirect to payment page."}
-            </p>
-          </div>
-        )}
       </div>
+
+      {/* ── Submission Summary Modal ─────────────────────────────────────── */}
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent className="max-w-lg rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-heading text-xl">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                <Check className="w-4 h-4 text-white" />
+              </div>
+              Review Your Details
+            </DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Please confirm the information below before creating your account.
+            </p>
+          </DialogHeader>
+
+          {submittedData && (
+            <div className="mt-2 rounded-xl border border-muted bg-muted/30 px-4 py-1 max-h-[60vh] overflow-y-auto">
+              <Row label="Company" value={submittedData.company_name} />
+              <Row label="Contact" value={submittedData.contact_name} />
+              <Row label="Email" value={submittedData.email} />
+              <Row label="Phone" value={submittedData.phone} />
+              <Row label="Industry" value={submittedData.industry} />
+              <Row label="Website" value={submittedData.website} />
+              <Row
+                label="Plan"
+                value={`${selectedPlan?.name} — ${selectedPlan?.price}`}
+              />
+              <Row
+                label="Platforms"
+                value={submittedData.social_platforms.join(", ")}
+              />
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 mt-2">
+            <Button
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setShowModal(false)}
+            >
+              <X className="w-4 h-4 mr-1" /> Edit
+            </Button>
+            <Button
+              className="rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90"
+              onClick={handleConfirm}
+            >
+              <Check className="w-4 h-4 mr-1" /> Confirm & Submit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

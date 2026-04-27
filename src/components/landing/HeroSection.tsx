@@ -24,7 +24,7 @@ interface FunnelItem {
 
 export default function HeroSection() {
   const stats: StatItem[] = [
-    { label: "Revenue", value: "$48.2K", change: "+24%", icon: TrendingUp },
+    { label: "Revenue", value: "£48.2K", change: "+24%", icon: TrendingUp },
     { label: "Leads", value: "1,847", change: "+18%", icon: BarChart3 },
     { label: "ROI", value: "342%", change: "+12%", icon: Zap },
   ];
