@@ -65,7 +65,7 @@ const plans: Plan[] = [
   },
   {
     name: "Accelerator",
-    price: "£2500",
+    price: "£2499",
     period: "/month",
     description: "For enterprise brands",
     features: [

@@ -1,9 +1,26 @@
-import { useState, useEffect } from "react";
-import { DollarSign, Users, TrendingUp, Target, Megaphone } from "lucide-react";
-import KPICard from "../components/dashboard/KPICard";
-import RevenueChart from "../components/dashboard/RevenueChart";
-import FunnelChart from "../components/dashboard/FunnelChart";
-import PlatformBreakdown from "../components/dashboard/PlatformBreakdown";
+import { useState, useEffect, useRef } from "react";
+import {
+  Instagram,
+  Facebook,
+  Twitter,
+  Youtube,
+  Linkedin,
+  TrendingUp,
+  TrendingDown,
+  MoreVertical,
+} from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface Campaign {
   id: string;
@@ -20,17 +37,12 @@ interface Campaign {
   [key: string]: any;
 }
 
-interface FunnelStage {
-  label: string;
-  value: number;
-  color: string;
-}
+// ─── Static Data ─────────────────────────────────────────────────────────────
 
-// Static campaign data
 const STATIC_CAMPAIGNS: Campaign[] = [
   {
     id: "1",
-    name: "Summer Launch Campaign",
+    name: "Summer Launch",
     revenue: 12500,
     leads: 450,
     spend: 3200,
@@ -43,7 +55,7 @@ const STATIC_CAMPAIGNS: Campaign[] = [
   },
   {
     id: "2",
-    name: "Influencer Partnership - Q1",
+    name: "Influencer Q1",
     revenue: 8900,
     leads: 320,
     spend: 2800,
@@ -69,7 +81,7 @@ const STATIC_CAMPAIGNS: Campaign[] = [
   },
   {
     id: "4",
-    name: "Brand Awareness Week",
+    name: "Brand Awareness",
     revenue: 3200,
     leads: 120,
     spend: 1800,
@@ -82,7 +94,7 @@ const STATIC_CAMPAIGNS: Campaign[] = [
   },
   {
     id: "5",
-    name: "Product Launch - Spring",
+    name: "Spring Launch",
     revenue: 9800,
     leads: 420,
     spend: 3000,
@@ -95,7 +107,7 @@ const STATIC_CAMPAIGNS: Campaign[] = [
   },
   {
     id: "6",
-    name: "Retargeting Campaign",
+    name: "Retargeting",
     revenue: 5600,
     leads: 210,
     spend: 1500,
@@ -108,7 +120,7 @@ const STATIC_CAMPAIGNS: Campaign[] = [
   },
   {
     id: "7",
-    name: "Influencer Collab - Summer",
+    name: "Influencer Summer",
     revenue: 11200,
     leads: 380,
     spend: 3500,
@@ -121,7 +133,7 @@ const STATIC_CAMPAIGNS: Campaign[] = [
   },
   {
     id: "8",
-    name: "Flash Sale Campaign",
+    name: "Flash Sale",
     revenue: 8900,
     leads: 290,
     spend: 2200,
@@ -134,167 +146,798 @@ const STATIC_CAMPAIGNS: Campaign[] = [
   },
 ];
 
-// Static funnel data (used as fallback if campaign data is insufficient)
-const DEFAULT_FUNNEL_STAGES: FunnelStage[] = [
-  { label: "Impressions", value: 24500, color: "bg-blue-500" },
-  { label: "Reach", value: 18200, color: "bg-violet-500" },
-  { label: "Clicks", value: 8400, color: "bg-amber-500" },
-  { label: "Leads", value: 1847, color: "bg-emerald-500" },
-  { label: "Conversions", value: 523, color: "bg-primary" },
+const SOCIAL_PLATFORMS = [
+  {
+    name: "Facebook",
+    value: "16.4 mln",
+    label: "Likes",
+    color: "#1877F2",
+    textColor: "#fff",
+    abbr: "f",
+  },
+  {
+    name: "Instagram",
+    value: "16.4 mln",
+    label: "Followers",
+    gradient: true,
+    abbr: "ig",
+  },
+  {
+    name: "YouTube",
+    value: "16.4 mln",
+    label: "Subscribers",
+    color: "#FF0000",
+    textColor: "#fff",
+    abbr: "▶",
+  },
+  {
+    name: "Twitter",
+    value: "15.4k",
+    label: "Followers",
+    color: "#1DA1F2",
+    textColor: "#fff",
+    abbr: "t",
+  },
+  {
+    name: "Google",
+    value: "160,543",
+    label: "Circled buy",
+    color: "#fff",
+    textColor: "#EA4335",
+    border: true,
+    abbr: "G",
+  },
+  {
+    name: "LinkedIn",
+    value: "10k",
+    label: "Followers",
+    color: "#0A66C2",
+    textColor: "#fff",
+    abbr: "in",
+  },
 ];
+
+const ACTIVE_USERS = [
+  {
+    platform: "Instagram",
+    count: 65376,
+    change: 12.5,
+    color: "#E1306C",
+    pct: 90,
+  },
+  {
+    platform: "Facebook",
+    count: 12109,
+    change: -3.2,
+    color: "#4A90D9",
+    pct: 18,
+  },
+  {
+    platform: "Twitter",
+    count: 132645,
+    change: 18.7,
+    color: "#00BFFF",
+    pct: 100,
+  },
+  {
+    platform: "Google",
+    count: 132645,
+    change: 5.4,
+    color: "#34A853",
+    pct: 100,
+  },
+];
+
+const SOCIAL_CONVERSIONS = [
+  { platform: "Instagram", pct: 25.3, color: "#E1306C" },
+  { platform: "Facebook", pct: 21.2, color: "#4A90D9" },
+  { platform: "Twitter", pct: 13.8, color: "#00BFFF" },
+  { platform: "Google", pct: 9.9, color: "#34A853" },
+  { platform: "Youtube", pct: 15.7, color: "#FF0000" },
+  { platform: "LinkedIn", pct: 14.1, color: "#0A66C2" },
+];
+
+const TRAFFIC_DATA = [
+  { name: "Instagram", lastMonth: 84500, lastYear: 72300 },
+  { name: "Facebook", lastMonth: 42100, lastYear: 38900 },
+  { name: "Twitter", lastMonth: 63700, lastYear: 59100 },
+  { name: "Google", lastMonth: 28400, lastYear: 25600 },
+  { name: "Youtube", lastMonth: 56900, lastYear: 51200 },
+  { name: "LinkedIn", lastMonth: 19300, lastYear: 17800 },
+];
+
+const TOTAL_STATS = [
+  { name: "Likes", pos: "+20%", neg: "-6%", sparkColor: "#34d399" },
+  { name: "Followers", pos: "+20%", neg: "-6%", sparkColor: "#818cf8" },
+  { name: "Page reach", pos: "+20%", neg: "-6%", sparkColor: "#f472b6" },
+  { name: "Retweets", pos: "+20%", neg: "-6%", sparkColor: "#a78bfa" },
+  { name: "Content watch", pos: "+20%", neg: "-6%", sparkColor: "#f87171" },
+  { name: "Engagement", pos: "+20%", neg: "-6%", sparkColor: "#60a5fa" },
+];
+
+// ─── Sparkline ────────────────────────────────────────────────────────────────
+
+function Sparkline({ color }: { color: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const w = canvas.offsetWidth || 80;
+    const h = 28;
+    canvas.width = w;
+    canvas.height = h;
+    const data = Array.from({ length: 10 }, () => Math.random() * 0.7 + 0.15);
+    ctx.clearRect(0, 0, w, h);
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = "round";
+    data.forEach((v, i) => {
+      const x = (i / (data.length - 1)) * w;
+      const y = h - v * h;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }, [color]);
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ width: "100%", height: 28, display: "block" }}
+    />
+  );
+}
+
+// ─── Donut Chart ──────────────────────────────────────────────────────────────
+
+function DonutChart() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const size = 110;
+    canvas.width = size;
+    canvas.height = size;
+    const cx = size / 2,
+      cy = size / 2,
+      r = 46,
+      inner = 30;
+    const total = SOCIAL_CONVERSIONS.reduce((s, d) => s + d.pct, 0);
+    let angle = -Math.PI / 2;
+    SOCIAL_CONVERSIONS.forEach(({ pct, color }) => {
+      const sweep = (pct / total) * 2 * Math.PI;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, angle, angle + sweep);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+      angle += sweep;
+    });
+    ctx.beginPath();
+    ctx.arc(cx, cy, inner, 0, 2 * Math.PI);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
+  }, []);
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: 110,
+        height: 110,
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <canvas ref={canvasRef} style={{ width: 110, height: 110 }} />
+      <div
+        style={{
+          position: "absolute",
+          textAlign: "center",
+          pointerEvents: "none",
+        }}
+      >
+        <div style={{ fontSize: 9, color: "#888", lineHeight: 1.3 }}>
+          Av conversion
+          <br />
+          rate
+        </div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a2e" }}>
+          8.4%
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Custom Y-axis tick ───────────────────────────────────────────────────────
+
+const CustomYTick = ({ x, y, payload }: any) => (
+  <text
+    x={x}
+    y={y}
+    dy={4}
+    textAnchor="end"
+    fill="#888"
+    fontSize={10}
+    fontFamily="DM Sans, sans-serif"
+  >
+    {payload.value >= 1000 ? `${payload.value / 1000}K` : payload.value}
+  </text>
+);
+
+const CustomXTick = ({ x, y, payload }: any) => (
+  <text
+    x={x}
+    y={y}
+    dy={12}
+    textAnchor="middle"
+    fill="#888"
+    fontSize={10}
+    fontFamily="DM Sans, sans-serif"
+  >
+    {payload.value}
+  </text>
+);
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<"Week" | "Month" | "Year">("Month");
 
   useEffect(() => {
-    const loadData = async (): Promise<void> => {
-      // Simulate API loading delay
-      await new Promise((resolve) => setTimeout(resolve, 800));
+    const load = async () => {
+      await new Promise((r) => setTimeout(r, 600));
       setCampaigns(STATIC_CAMPAIGNS);
       setLoading(false);
     };
-    loadData();
+    load();
   }, []);
-
-  const totalRevenue: number = campaigns.reduce(
-    (sum, c) => sum + (c.revenue || 0),
-    0,
-  );
-  const totalLeads: number = campaigns.reduce(
-    (sum, c) => sum + (c.leads || 0),
-    0,
-  );
-  const totalSpend: number = campaigns.reduce(
-    (sum, c) => sum + (c.spend || 0),
-    0,
-  );
-  const roi: string =
-    totalSpend > 0
-      ? (((totalRevenue - totalSpend) / totalSpend) * 100).toFixed(1)
-      : "0";
-  const costPerLead: string =
-    totalLeads > 0 ? (totalSpend / totalLeads).toFixed(2) : "0";
-  const totalImpressions: number = campaigns.reduce(
-    (sum, c) => sum + (c.impressions || 0),
-    0,
-  );
-  const totalClicks: number = campaigns.reduce(
-    (sum, c) => sum + (c.clicks || 0),
-    0,
-  );
-  const totalConversions: number = campaigns.reduce(
-    (sum, c) => sum + (c.conversions || 0),
-    0,
-  );
-  const totalReach: number = campaigns.reduce(
-    (sum, c) => sum + (c.reach || 0),
-    0,
-  );
-
-  // Use actual data from campaigns, fallback to default values if no data
-  const funnelStages: FunnelStage[] =
-    campaigns.length > 0
-      ? [
-          {
-            label: "Impressions",
-            value: totalImpressions || DEFAULT_FUNNEL_STAGES[0].value,
-            color: "bg-blue-500",
-          },
-          {
-            label: "Reach",
-            value: totalReach || DEFAULT_FUNNEL_STAGES[1].value,
-            color: "bg-violet-500",
-          },
-          {
-            label: "Clicks",
-            value: totalClicks || DEFAULT_FUNNEL_STAGES[2].value,
-            color: "bg-amber-500",
-          },
-          {
-            label: "Leads",
-            value: totalLeads || DEFAULT_FUNNEL_STAGES[3].value,
-            color: "bg-emerald-500",
-          },
-          {
-            label: "Conversions",
-            value: totalConversions || DEFAULT_FUNNEL_STAGES[4].value,
-            color: "bg-primary",
-          },
-        ]
-      : DEFAULT_FUNNEL_STAGES;
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100%",
+          background: "#f4f6fb",
+        }}
+      >
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            border: "3px solid #e0e4f0",
+            borderTopColor: "#6366f1",
+            borderRadius: "50%",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
   return (
-    <div className="p-6 lg:p-8 space-y-6 pb-24 md:pb-8">
-      <div>
-        <h1 className="font-heading text-2xl lg:text-3xl font-extrabold tracking-tight">
+    <div
+      style={{
+        fontFamily: "'DM Sans', 'Inter', sans-serif",
+        background: "#f4f6fb",
+        minHeight: "100vh",
+        color: "#1a1a2e",
+      }}
+    >
+      {/* ── Header ── */}
+      <div
+        style={{
+          background: "#fff",
+          borderBottom: "0.5px solid #e2e8f0",
+          padding: "12px 24px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#1a1a2e" }}>
           Dashboard
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Your brand performance at a glance
-        </p>
-      </div>
-
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <KPICard
-          title="Revenue"
-          value={`$${(totalRevenue || 48200).toLocaleString()}`}
-          change={24.3}
-          icon={DollarSign}
-          color="text-emerald-600"
-          bg="bg-emerald-500/10"
-        />
-        <KPICard
-          title="Leads"
-          value={(totalLeads || 1847).toLocaleString()}
-          change={18.2}
-          icon={Users}
-          color="text-blue-600"
-          bg="bg-blue-500/10"
-        />
-        <KPICard
-          title="ROI"
-          value={`${roi || 342}%`}
-          change={12.1}
-          icon={TrendingUp}
-          color="text-violet-600"
-          bg="bg-violet-500/10"
-        />
-        <KPICard
-          title="Cost/Lead"
-          value={`$${costPerLead || "12.40"}`}
-          change={-8.3}
-          icon={Target}
-          color="text-amber-600"
-          bg="bg-amber-500/10"
-        />
-        <KPICard
-          title="Campaigns"
-          value={campaigns.length || 12}
-          icon={Megaphone}
-          color="text-cyan-600"
-          bg="bg-cyan-500/10"
-        />
-      </div>
-
-      {/* Charts */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <RevenueChart />
         </div>
-        <PlatformBreakdown />
+        <div
+          style={{
+            display: "flex",
+            border: "1px solid #dde1ec",
+            borderRadius: 20,
+            overflow: "hidden",
+            background: "#fff",
+          }}
+        >
+          {(["Week", "Month", "Year"] as const).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              style={{
+                padding: "5px 14px",
+                fontSize: 12,
+                fontWeight: 500,
+                border: "none",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                background: period === p ? "#1a1a2e" : "transparent",
+                color: period === p ? "#fff" : "#666",
+                borderRadius: period === p ? 20 : 0,
+                transition: "all 0.15s",
+              }}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <FunnelChart stages={funnelStages} />
+      {/* ── Body ── */}
+      <div
+        style={{
+          padding: "20px 24px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+        }}
+      >
+        {/* Social platform pills */}
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            overflowX: "auto",
+            paddingBottom: 2,
+          }}
+        >
+          {SOCIAL_PLATFORMS.map((s) => (
+            <div
+              key={s.name}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                background: "#fff",
+                border: "0.5px solid #e2e8f0",
+                borderRadius: 10,
+                padding: "8px 14px",
+                minWidth: 130,
+                flexShrink: 0,
+              }}
+            >
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 6,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 12,
+                  fontWeight: 800,
+                  flexShrink: 0,
+                  background: s.gradient
+                    ? "linear-gradient(135deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)"
+                    : s.color,
+                  color: s.textColor || "#fff",
+                  border: s.border ? "1px solid #ddd" : "none",
+                }}
+              >
+                {s.abbr}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <span
+                  style={{ fontSize: 13, fontWeight: 700, color: "#1a1a2e" }}
+                >
+                  {s.value}
+                </span>
+                <span style={{ fontSize: 10, color: "#888" }}>{s.label}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Total stats dark card */}
+        <div
+          style={{
+            background: "#1a1a2e",
+            borderRadius: 14,
+            padding: "16px 20px",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: "#c8ccda",
+              marginBottom: 12,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            Total stats
+            <MoreVertical
+              size={16}
+              color="#555"
+              style={{ cursor: "pointer" }}
+            />
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(6, 1fr)",
+              gap: 8,
+            }}
+          >
+            {TOTAL_STATS.map((s) => (
+              <div
+                key={s.name}
+                style={{
+                  background: "#252744",
+                  borderRadius: 10,
+                  padding: "10px 12px",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 500,
+                    color: "#9ca3b8",
+                    marginBottom: 4,
+                  }}
+                >
+                  {s.name}
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>
+                  {s.pos}
+                </div>
+                <div style={{ fontSize: 10, color: "#f87171", marginTop: 2 }}>
+                  {s.neg}
+                </div>
+                <Sparkline color={s.sparkColor} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Main 2-col grid */}
+        <div
+          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}
+        >
+          {/* Left: Bar Chart */}
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 14,
+              border: "0.5px solid #e2e8f0",
+              padding: "16px 18px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#1a1a2e",
+                marginBottom: 8,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              Social traffic
+              <MoreVertical
+                size={16}
+                color="#bbb"
+                style={{ cursor: "pointer" }}
+              />
+            </div>
+            {/* Legend */}
+            <div
+              style={{
+                display: "flex",
+                gap: 14,
+                marginBottom: 8,
+                fontSize: 11,
+              }}
+            >
+              <span
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  color: "#666",
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "#a78bfa",
+                    display: "inline-block",
+                  }}
+                />
+                Last month
+              </span>
+              <span
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  color: "#666",
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: "#4ade80",
+                    display: "inline-block",
+                  }}
+                />
+                Last year
+              </span>
+            </div>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={TRAFFIC_DATA} barCategoryGap="30%" barGap={3}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke="rgba(0,0,0,0.06)"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="name"
+                  tick={<CustomXTick />}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={<CustomYTick />}
+                  axisLine={false}
+                  tickLine={false}
+                  tickCount={5}
+                  domain={[0, 100000]}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "#fff",
+                    border: "0.5px solid #e2e8f0",
+                    borderRadius: 8,
+                    fontSize: 11,
+                    fontFamily: "DM Sans, sans-serif",
+                  }}
+                  formatter={(v: number) => [`${(v / 1000).toFixed(1)}K`, ""]}
+                />
+                <Bar
+                  dataKey="lastMonth"
+                  name="Last month"
+                  fill="#a78bfa"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="lastYear"
+                  name="Last year"
+                  fill="rgba(74,222,128,0.6)"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Right column: Active Users + Donut */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Active Users */}
+            <div
+              style={{
+                background: "#fff",
+                borderRadius: 14,
+                border: "0.5px solid #e2e8f0",
+                padding: "16px 18px",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#1a1a2e",
+                  marginBottom: 10,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                Active users
+                <MoreVertical
+                  size={16}
+                  color="#bbb"
+                  style={{ cursor: "pointer" }}
+                />
+              </div>
+              {/* Legend pills */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  marginBottom: 10,
+                  flexWrap: "wrap",
+                }}
+              >
+                {ACTIVE_USERS.map((u) => (
+                  <span
+                    key={u.platform}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontSize: 10,
+                      color: "#555",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        background: u.color,
+                        display: "inline-block",
+                      }}
+                    />
+                    {u.platform}
+                  </span>
+                ))}
+              </div>
+              {ACTIVE_USERS.map((u) => (
+                <div
+                  key={u.platform}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    marginBottom: 10,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color: "#333",
+                      width: 70,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {u.platform}
+                  </span>
+                  <div
+                    style={{
+                      flex: 1,
+                      height: 8,
+                      background: "#f0f2f8",
+                      borderRadius: 4,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${u.pct}%`,
+                        background: u.color,
+                        borderRadius: 4,
+                      }}
+                    />
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: "#1a1a2e",
+                      width: 56,
+                      textAlign: "right",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {u.count.toLocaleString()}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      width: 40,
+                      textAlign: "right",
+                      flexShrink: 0,
+                      color: u.change >= 0 ? "#22c55e" : "#ef4444",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {u.change >= 0 ? "+" : ""}
+                    {u.change}%
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Social Media Conversions Donut */}
+            <div
+              style={{
+                background: "#fff",
+                borderRadius: 14,
+                border: "0.5px solid #e2e8f0",
+                padding: "16px 18px",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#1a1a2e",
+                  marginBottom: 12,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                Social media conversions
+                <MoreVertical
+                  size={16}
+                  color="#bbb"
+                  style={{ cursor: "pointer" }}
+                />
+              </div>
+              <div
+                style={{ display: "flex", gap: 16, alignItems: "flex-start" }}
+              >
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 7,
+                  }}
+                >
+                  {SOCIAL_CONVERSIONS.map((c) => (
+                    <div
+                      key={c.platform}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 7,
+                        fontSize: 11,
+                        color: "#333",
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          background: c.color,
+                          flexShrink: 0,
+                          display: "inline-block",
+                        }}
+                      />
+                      <span style={{ flex: 1 }}>{c.platform}</span>
+                      <span style={{ fontWeight: 600, color: "#1a1a2e" }}>
+                        {c.pct}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <DonutChart />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
