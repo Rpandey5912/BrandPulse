@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useFormik } from "formik";
 import * as Yup from "yup";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
+import { InfluencersAPI } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,8 +24,6 @@ import {
 import { ArrowLeft, Check, Globe, X } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
-declare const process: any;
-
 type Platform = "Instagram" | "TikTok" | "YouTube" | "LinkedIn" | "Google";
 type Niche =
   | "Food"
@@ -39,8 +38,6 @@ type Niche =
   | "Lifestyle"
   | "Entertainment"
   | "Health";
-
-let influencerApplications: any[] = [];
 
 const niches: Niche[] = [
   "Food",
@@ -71,6 +68,7 @@ const validationSchema = Yup.object({
   email: Yup.string()
     .email("Please enter a valid email address")
     .required("Email is required"),
+  tenant_id: Yup.string().required("Brand / Company ID is required"),
   phone: Yup.string().test(
     "phone-optional",
     "Please enter a valid phone number",
@@ -131,8 +129,13 @@ function Row({ label, value }: { label: string; value: string }) {
 export default function InfluencerRegister() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const [showModal, setShowModal] = useState(false);
   const [submittedData, setSubmittedData] = useState<any>(null);
+  const [confirming, setConfirming] = useState(false);
+
+  // Brands share their registration link with ?tenant_id=<id>
+  const tenantIdFromUrl = searchParams.get("tenant_id") ?? "";
 
   const formik = useFormik({
     initialValues: {
@@ -147,6 +150,7 @@ export default function InfluencerRegister() {
       bio: "",
       rate_per_post: "",
       location: "",
+      tenant_id: tenantIdFromUrl,
     },
     validationSchema,
     onSubmit: async (values, { setSubmitting }) => {
@@ -158,29 +162,43 @@ export default function InfluencerRegister() {
     },
   });
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!submittedData) return;
-    setShowModal(false);
-
-    const newInfluencer = {
-      id: Math.random().toString(36).substr(2, 9),
-      ...submittedData,
-      follower_count: parseInt(submittedData.follower_count) || 0,
-      engagement_rate: parseFloat(submittedData.engagement_rate) || 0,
-      rate_per_post: parseFloat(submittedData.rate_per_post) || 0,
-      status: "pending",
-      created_date: new Date().toISOString(),
-    };
-
-    influencerApplications.push(newInfluencer);
-    console.log("New influencer application submitted:", newInfluencer);
-
-    toast({
-      title: "Application Submitted!",
-      description: "We'll review your profile and get back to you soon.",
-    });
-
-    navigate("/");
+    setConfirming(true);
+    try {
+      await InfluencersAPI.selfRegister({
+        tenant_id: submittedData.tenant_id,
+        full_name: submittedData.full_name,
+        email: submittedData.email,
+        phone: submittedData.phone || undefined,
+        location: submittedData.location || undefined,
+        niche: submittedData.niche,
+        bio: submittedData.bio || undefined,
+        portfolio_url: submittedData.portfolio_url || undefined,
+        follower_count: parseInt(submittedData.follower_count) || 0,
+        engagement_rate: parseFloat(submittedData.engagement_rate) || 0,
+        rate_per_post: parseFloat(submittedData.rate_per_post) || 0,
+        platforms: submittedData.platforms.map((p: string) => ({
+          platform: p,
+          handle: "",
+          followers: 0,
+        })),
+      });
+      setShowModal(false);
+      toast({
+        title: "Application Submitted!",
+        description: "We'll review your profile and get back to you within 2–3 business days.",
+      });
+      navigate("/");
+    } catch (err: any) {
+      const detail = err?.response?.detail;
+      const msg = Array.isArray(detail)
+        ? detail.map((d: any) => d.msg).join(", ")
+        : (typeof detail === "string" ? detail : (err.message ?? "Submission failed"));
+      toast({ title: "Error", description: msg, variant: "destructive" });
+    } finally {
+      setConfirming(false);
+    }
   };
 
   const handlePlatformToggle = (platform: Platform) => {
@@ -221,6 +239,28 @@ export default function InfluencerRegister() {
         </p>
 
         <form onSubmit={formik.handleSubmit} className="space-y-6">
+          {/* Brand ID — hidden if pre-filled from URL */}
+          {!tenantIdFromUrl && (
+            <div className="space-y-2">
+              <Label htmlFor="tenant_id">Brand / Company ID *</Label>
+              <Input
+                id="tenant_id"
+                name="tenant_id"
+                value={formik.values.tenant_id}
+                onChange={formik.handleChange}
+                onBlur={formik.handleBlur}
+                placeholder="Enter the brand ID shared with you"
+                className={`rounded-xl h-11 ${fieldError("tenant_id") ? "border-red-500" : ""}`}
+              />
+              {fieldError("tenant_id") && (
+                <p className="text-xs text-red-500">{fieldError("tenant_id")}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Ask the brand to share their registration link, or enter the ID they provided.
+              </p>
+            </div>
+          )}
+
           {/* Personal Info */}
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -464,12 +504,6 @@ export default function InfluencerRegister() {
           </Button>
         </form>
 
-        {process.env.NODE_ENV === "development" && (
-          <div className="mt-8 p-4 bg-muted rounded-xl text-xs text-muted-foreground">
-            <p className="font-medium mb-1">Debug Info:</p>
-            <p>Total applications submitted: {influencerApplications.length}</p>
-          </div>
-        )}
       </div>
 
       {/* ── Submission Summary Modal ─────────────────────────────────────── */}
@@ -489,6 +523,7 @@ export default function InfluencerRegister() {
 
           {submittedData && (
             <div className="mt-2 rounded-xl border border-muted bg-muted/30 px-4 py-1 max-h-[60vh] overflow-y-auto">
+              <Row label="Brand ID" value={submittedData.tenant_id} />
               <Row label="Full Name" value={submittedData.full_name} />
               <Row label="Email" value={submittedData.email} />
               <Row label="Phone" value={submittedData.phone} />
@@ -537,9 +572,17 @@ export default function InfluencerRegister() {
             </Button>
             <Button
               className="rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90"
+              disabled={confirming}
               onClick={handleConfirm}
             >
-              <Check className="w-4 h-4 mr-1" /> Confirm & Submit
+              {confirming ? (
+                <span className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Submitting…
+                </span>
+              ) : (
+                <><Check className="w-4 h-4 mr-1" /> Confirm & Submit</>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

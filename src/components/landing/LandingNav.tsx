@@ -4,13 +4,13 @@ import { BarChart3, Menu, X } from "lucide-react";
 import { useState } from "react";
 
 export default function LandingNav() {
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState<boolean>(false);
 
   return (
     <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+          <div className="w-9 h-9 rounded-xl bg-[#713feb] flex items-center justify-center">
             <BarChart3 className="w-5 h-5 text-white" />
           </div>
           <span className="font-heading font-extrabold text-xl tracking-tight">
@@ -53,7 +53,7 @@ export default function LandingNav() {
           <Link to="/register">
             <Button
               size="sm"
-              className="rounded-lg bg-gradient-to-r from-primary to-accent hover:opacity-90"
+              className="rounded-lg bg-[#713feb] hover:bg-[#5c32c4] transition-colors"
             >
               Get Started
             </Button>
@@ -63,6 +63,7 @@ export default function LandingNav() {
         <button
           className="md:hidden"
           onClick={() => setMobileOpen(!mobileOpen)}
+          aria-label={mobileOpen ? "Close menu" : "Open menu"}
         >
           {mobileOpen ? (
             <X className="w-6 h-6" />
@@ -102,7 +103,7 @@ export default function LandingNav() {
               </Button>
             </Link>
             <Link to="/register" className="flex-1">
-              <Button className="w-full rounded-lg bg-gradient-to-r from-primary to-accent">
+              <Button className="w-full rounded-lg bg-[#713feb] hover:bg-[#5c32c4] transition-colors">
                 Get Started
               </Button>
             </Link>

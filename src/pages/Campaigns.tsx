@@ -1,4 +1,6 @@
-import { useState, type FormEvent, type ChangeEvent } from "react";
+import { useState, useRef, useEffect, type FormEvent, type ChangeEvent } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { CampaignsAPI } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,44 +20,18 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Search, MoreVertical, Pencil, Trash2 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/ui/use-toast";
 
 type CampaignStatus = "draft" | "active" | "paused" | "completed";
 type Platform = "Instagram" | "TikTok" | "YouTube" | "LinkedIn" | "Google";
-
-interface Campaign {
-  id: string;
-  name: string;
-  platform: Platform;
-  status: CampaignStatus;
-  budget: number;
-  spend: number;
-  impressions: number;
-  reach: number;
-  clicks: number;
-  leads: number;
-  conversions: number;
-  revenue: number;
-}
 
 interface CampaignFormData {
   name: string;
   platform: Platform | "";
   status: CampaignStatus;
   budget: string;
-  spend: string;
-  impressions: string;
-  reach: string;
-  clicks: string;
-  leads: string;
-  conversions: string;
-  revenue: string;
+  start_date: string;
+  end_date: string;
 }
 
 const platforms: Platform[] = [
@@ -82,199 +58,176 @@ const platformIcons: Record<Platform, string> = {
   Google: "🔍",
 };
 
-// Static demo data
-const DEMO_CAMPAIGNS: Campaign[] = [
-  {
-    id: "1",
-    name: "Summer Brand Awareness",
-    platform: "Instagram",
-    status: "active",
-    budget: 5000,
-    spend: 3250,
-    impressions: 125000,
-    reach: 98000,
-    clicks: 4500,
-    leads: 380,
-    conversions: 95,
-    revenue: 12500,
-  },
-  {
-    id: "2",
-    name: "TikTok Viral Challenge",
-    platform: "TikTok",
-    status: "active",
-    budget: 8000,
-    spend: 6200,
-    impressions: 250000,
-    reach: 210000,
-    clicks: 8900,
-    leads: 520,
-    conversions: 145,
-    revenue: 18000,
-  },
-  {
-    id: "3",
-    name: "LinkedIn B2B Outreach",
-    platform: "LinkedIn",
-    status: "paused",
-    budget: 3000,
-    spend: 1800,
-    impressions: 45000,
-    reach: 32000,
-    clicks: 1200,
-    leads: 290,
-    conversions: 42,
-    revenue: 22000,
-  },
-  {
-    id: "4",
-    name: "YouTube Product Reviews",
-    platform: "YouTube",
-    status: "completed",
-    budget: 10000,
-    spend: 9800,
-    impressions: 180000,
-    reach: 145000,
-    clicks: 5200,
-    leads: 410,
-    conversions: 128,
-    revenue: 28000,
-  },
-  {
-    id: "5",
-    name: "Google Ads Q1",
-    platform: "Google",
-    status: "active",
-    budget: 12000,
-    spend: 11500,
-    impressions: 320000,
-    reach: 280000,
-    clicks: 15400,
-    leads: 680,
-    conversions: 210,
-    revenue: 35000,
-  },
-  {
-    id: "6",
-    name: "Holiday Special Campaign",
-    platform: "Instagram",
-    status: "draft",
-    budget: 4000,
-    spend: 0,
-    impressions: 0,
-    reach: 0,
-    clicks: 0,
-    leads: 0,
-    conversions: 0,
-    revenue: 0,
-  },
-];
+const EMPTY_FORM: CampaignFormData = {
+  name: "",
+  platform: "",
+  status: "draft",
+  budget: "",
+  start_date: "",
+  end_date: "",
+};
+
+function CampaignActionsMenu({
+  onEdit,
+  onDelete,
+}: {
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="rounded-xl"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <MoreVertical className="w-4 h-4" />
+      </Button>
+      {open && (
+        <div className="absolute right-0 top-10 z-50 min-w-[140px] rounded-lg border bg-popover p-1 shadow-md">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+            onClick={() => { setOpen(false); onEdit(); }}
+          >
+            <Pencil className="w-4 h-4" /> Edit
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+            onClick={() => { setOpen(false); onDelete(); }}
+          >
+            <Trash2 className="w-4 h-4" /> Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Campaigns() {
   const { toast } = useToast();
-  const [campaigns, setCampaigns] = useState<Campaign[]>(DEMO_CAMPAIGNS);
-  const [loading] = useState<boolean>(false);
-  const [search, setSearch] = useState<string>("");
-  const [dialogOpen, setDialogOpen] = useState<boolean>(false);
-  const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<CampaignFormData>(EMPTY_FORM);
 
-  const [form, setForm] = useState<CampaignFormData>({
-    name: "",
-    platform: "",
-    status: "draft",
-    budget: "",
-    spend: "",
-    impressions: "",
-    reach: "",
-    clicks: "",
-    leads: "",
-    conversions: "",
-    revenue: "",
+  // ── Fetch ──────────────────────────────────────────────────────────────────
+  const { data, isLoading } = useQuery({
+    queryKey: ["campaigns", search],
+    queryFn: () =>
+      CampaignsAPI.list({ search: search || undefined, per_page: 50 }).then(
+        (r: any) => r.data,
+      ),
+    staleTime: 30_000,
+  });
+  const campaigns: any[] = data ?? [];
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+
+  const createMutation = useMutation({
+    mutationFn: (body: any) => CampaignsAPI.create(body),
+    onSuccess: () => {
+      toast({ title: "Campaign created!" });
+      invalidate();
+    },
+    onError: (e: any) =>
+      toast({
+        title: "Error",
+        description: e?.response?.message ?? e.message,
+        variant: "destructive",
+      }),
   });
 
-  const resetForm = (): void => {
-    setForm({
-      name: "",
-      platform: "",
-      status: "draft",
-      budget: "",
-      spend: "",
-      impressions: "",
-      reach: "",
-      clicks: "",
-      leads: "",
-      conversions: "",
-      revenue: "",
-    });
-    setEditingCampaign(null);
+  const updateMutation = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: any }) =>
+      CampaignsAPI.update(id, body),
+    onSuccess: () => {
+      toast({ title: "Campaign updated!" });
+      invalidate();
+    },
+    onError: (e: any) =>
+      toast({
+        title: "Error",
+        description: e?.response?.message ?? e.message,
+        variant: "destructive",
+      }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => CampaignsAPI.delete(id),
+    onSuccess: () => {
+      toast({ title: "Campaign deleted" });
+      invalidate();
+    },
+    onError: (e: any) =>
+      toast({
+        title: "Error",
+        description: e?.response?.message ?? e.message,
+        variant: "destructive",
+      }),
+  });
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
+  const resetForm = () => {
+    setForm(EMPTY_FORM);
+    setEditingId(null);
   };
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
-    const payload: Omit<Campaign, "id"> = {
+    const payload = {
       name: form.name,
-      platform: form.platform as Platform,
+      platform: form.platform,
       status: form.status,
       budget: parseFloat(form.budget) || 0,
-      spend: parseFloat(form.spend) || 0,
-      impressions: parseInt(form.impressions) || 0,
-      reach: parseInt(form.reach) || 0,
-      clicks: parseInt(form.clicks) || 0,
-      leads: parseInt(form.leads) || 0,
-      conversions: parseInt(form.conversions) || 0,
-      revenue: parseFloat(form.revenue) || 0,
+      start_date: form.start_date || undefined,
+      end_date: form.end_date || undefined,
     };
-
-    if (editingCampaign) {
-      // Update existing campaign
-      setCampaigns((prev) =>
-        prev.map((c) =>
-          c.id === editingCampaign.id ? { ...c, ...payload } : c,
-        ),
-      );
-      toast({ title: "Campaign updated!" });
+    if (editingId) {
+      await updateMutation.mutateAsync({ id: editingId, body: payload });
     } else {
-      // Create new campaign
-      const newCampaign: Campaign = {
-        id: Date.now().toString(),
-        ...payload,
-      };
-      setCampaigns((prev) => [newCampaign, ...prev]);
-      toast({ title: "Campaign created!" });
+      await createMutation.mutateAsync(payload);
     }
     resetForm();
     setDialogOpen(false);
   };
 
-  const handleEdit = (campaign: Campaign): void => {
-    setEditingCampaign(campaign);
+  const handleEdit = (c: any) => {
+    setEditingId(c.id);
     setForm({
-      name: campaign.name,
-      platform: campaign.platform,
-      status: campaign.status,
-      budget: String(campaign.budget || ""),
-      spend: String(campaign.spend || ""),
-      impressions: String(campaign.impressions || ""),
-      reach: String(campaign.reach || ""),
-      clicks: String(campaign.clicks || ""),
-      leads: String(campaign.leads || ""),
-      conversions: String(campaign.conversions || ""),
-      revenue: String(campaign.revenue || ""),
+      name: c.name,
+      platform: c.platform,
+      status: c.status,
+      budget: String(c.budget ?? ""),
+      start_date: c.start_date ? c.start_date.slice(0, 10) : "",
+      end_date: c.end_date ? c.end_date.slice(0, 10) : "",
     });
     setDialogOpen(true);
   };
 
-  const handleDelete = async (id: string): Promise<void> => {
-    setCampaigns((prev) => prev.filter((c) => c.id !== id));
-    toast({ title: "Campaign deleted" });
-  };
+  const isSaving = createMutation.isPending || updateMutation.isPending;
 
-  const filtered = campaigns.filter((c) =>
-    c.name?.toLowerCase().includes(search.toLowerCase()),
-  );
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
@@ -284,6 +237,7 @@ export default function Campaigns() {
 
   return (
     <div className="p-6 lg:p-8 space-y-6 pb-24 md:pb-8">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-heading text-2xl lg:text-3xl font-extrabold tracking-tight">
@@ -295,7 +249,7 @@ export default function Campaigns() {
         </div>
         <Dialog
           open={dialogOpen}
-          onOpenChange={(o: boolean) => {
+          onOpenChange={(o) => {
             setDialogOpen(o);
             if (!o) resetForm();
           }}
@@ -308,7 +262,7 @@ export default function Campaigns() {
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="font-heading">
-                {editingCampaign ? "Edit Campaign" : "Create Campaign"}
+                {editingId ? "Edit Campaign" : "Create Campaign"}
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4 mt-4">
@@ -321,6 +275,7 @@ export default function Campaigns() {
                     setForm((p) => ({ ...p, name: e.target.value }))
                   }
                   className="rounded-xl"
+                  placeholder="e.g. Summer Launch"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -339,7 +294,7 @@ export default function Campaigns() {
                     <SelectContent>
                       {platforms.map((p) => (
                         <SelectItem key={p} value={p}>
-                          {p}
+                          {platformIcons[p]} {p}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -366,97 +321,37 @@ export default function Campaigns() {
                   </Select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Budget ($)</Label>
-                  <Input
-                    type="number"
-                    value={form.budget}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setForm((p) => ({ ...p, budget: e.target.value }))
-                    }
-                    className="rounded-xl"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Spend ($)</Label>
-                  <Input
-                    type="number"
-                    value={form.spend}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setForm((p) => ({ ...p, spend: e.target.value }))
-                    }
-                    className="rounded-xl"
-                  />
-                </div>
+              <div className="space-y-2">
+                <Label>Budget (£)</Label>
+                <Input
+                  type="number"
+                  value={form.budget}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setForm((p) => ({ ...p, budget: e.target.value }))
+                  }
+                  className="rounded-xl"
+                  placeholder="0"
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Impressions</Label>
+                  <Label>Start Date</Label>
                   <Input
-                    type="number"
-                    value={form.impressions}
+                    type="date"
+                    value={form.start_date}
                     onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setForm((p) => ({ ...p, impressions: e.target.value }))
+                      setForm((p) => ({ ...p, start_date: e.target.value }))
                     }
                     className="rounded-xl"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Reach</Label>
+                  <Label>End Date</Label>
                   <Input
-                    type="number"
-                    value={form.reach}
+                    type="date"
+                    value={form.end_date}
                     onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setForm((p) => ({ ...p, reach: e.target.value }))
-                    }
-                    className="rounded-xl"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Clicks</Label>
-                  <Input
-                    type="number"
-                    value={form.clicks}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setForm((p) => ({ ...p, clicks: e.target.value }))
-                    }
-                    className="rounded-xl"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Leads</Label>
-                  <Input
-                    type="number"
-                    value={form.leads}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setForm((p) => ({ ...p, leads: e.target.value }))
-                    }
-                    className="rounded-xl"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Conversions</Label>
-                  <Input
-                    type="number"
-                    value={form.conversions}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setForm((p) => ({ ...p, conversions: e.target.value }))
-                    }
-                    className="rounded-xl"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Revenue ($)</Label>
-                  <Input
-                    type="number"
-                    value={form.revenue}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setForm((p) => ({ ...p, revenue: e.target.value }))
+                      setForm((p) => ({ ...p, end_date: e.target.value }))
                     }
                     className="rounded-xl"
                   />
@@ -464,15 +359,26 @@ export default function Campaigns() {
               </div>
               <Button
                 type="submit"
+                disabled={isSaving}
                 className="w-full rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90"
               >
-                {editingCampaign ? "Update Campaign" : "Create Campaign"}
+                {isSaving ? (
+                  <span className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Saving…
+                  </span>
+                ) : editingId ? (
+                  "Update Campaign"
+                ) : (
+                  "Create Campaign"
+                )}
               </Button>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
+      {/* Search */}
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
@@ -480,12 +386,13 @@ export default function Campaigns() {
           onChange={(e: ChangeEvent<HTMLInputElement>) =>
             setSearch(e.target.value)
           }
-          placeholder="Search campaigns..."
+          placeholder="Search campaigns…"
           className="pl-10 rounded-xl"
         />
       </div>
 
-      {filtered.length === 0 ? (
+      {/* List */}
+      {campaigns.length === 0 ? (
         <div className="text-center py-16 text-muted-foreground">
           <p className="text-lg font-medium">No campaigns yet</p>
           <p className="text-sm mt-1">
@@ -494,67 +401,43 @@ export default function Campaigns() {
         </div>
       ) : (
         <div className="grid gap-4">
-          {filtered.map((campaign) => (
+          {campaigns.map((c: any) => (
             <div
-              key={campaign.id}
+              key={c.id}
               className="bg-card rounded-2xl border p-5 flex flex-col sm:flex-row sm:items-center gap-4 hover:shadow-md transition-shadow"
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-lg">
-                    {platformIcons[campaign.platform] || "📊"}
+                    {platformIcons[c.platform as Platform] ?? "📊"}
                   </span>
-                  <h3 className="font-heading font-bold truncate">
-                    {campaign.name}
-                  </h3>
+                  <h3 className="font-heading font-bold truncate">{c.name}</h3>
                   <Badge
                     variant="secondary"
-                    className={`text-xs ${statusColors[campaign.status]}`}
+                    className={`text-xs ${statusColors[c.status as CampaignStatus]}`}
                   >
-                    {campaign.status}
+                    {c.status}
                   </Badge>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {campaign.platform}
-                </p>
+                <p className="text-sm text-muted-foreground">{c.platform}</p>
               </div>
               <div className="flex items-center gap-6 text-sm">
                 <div className="text-center">
                   <p className="font-bold">
-                    ${(campaign.revenue || 0).toLocaleString()}
+                    £{(c.budget ?? 0).toLocaleString()}
                   </p>
-                  <p className="text-xs text-muted-foreground">Revenue</p>
+                  <p className="text-xs text-muted-foreground">Budget</p>
                 </div>
                 <div className="text-center">
                   <p className="font-bold">
-                    {(campaign.leads || 0).toLocaleString()}
+                    £{(c.spend ?? 0).toLocaleString()}
                   </p>
-                  <p className="text-xs text-muted-foreground">Leads</p>
+                  <p className="text-xs text-muted-foreground">Spend</p>
                 </div>
-                <div className="text-center">
-                  <p className="font-bold">
-                    {(campaign.impressions || 0).toLocaleString()}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Impressions</p>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="rounded-xl">
-                      <MoreVertical className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleEdit(campaign)}>
-                      <Pencil className="w-4 h-4 mr-2" /> Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-destructive"
-                      onClick={() => handleDelete(campaign.id)}
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" /> Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <CampaignActionsMenu
+                  onEdit={() => handleEdit(c)}
+                  onDelete={() => deleteMutation.mutate(c.id)}
+                />
               </div>
             </div>
           ))}

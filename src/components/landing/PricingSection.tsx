@@ -11,6 +11,7 @@ interface Plan {
   features: string[];
   cta: string;
   popular: boolean;
+  planKey: string;
 }
 
 const plans: Plan[] = [
@@ -28,6 +29,7 @@ const plans: Plan[] = [
     ],
     cta: "Start Free Trial",
     popular: false,
+    planKey: "trial",
   },
   {
     name: "Growth",
@@ -44,6 +46,7 @@ const plans: Plan[] = [
     ],
     cta: "Get Started",
     popular: false,
+    planKey: "silver",
   },
   {
     name: "Scale",
@@ -62,6 +65,7 @@ const plans: Plan[] = [
     ],
     cta: "Get Started",
     popular: true,
+    planKey: "gold",
   },
   {
     name: "Accelerator",
@@ -78,8 +82,9 @@ const plans: Plan[] = [
       "SLA guarantee",
       "Advanced ROI modeling",
     ],
-    cta: "Contact Sales",
+    cta: "Get Started",
     popular: false,
+    planKey: "platinum",
   },
 ];
 
@@ -148,7 +153,7 @@ export default function PricingSection() {
                   </li>
                 ))}
               </ul>
-              <Link to="/register">
+              <Link to={`/register?plan=${plan.planKey}`}>
                 <Button
                   className={`w-full rounded-xl h-12 cursor-pointer ${
                     plan.popular

@@ -1,6 +1,5 @@
 import { useState, type FormEvent, type ChangeEvent } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -13,368 +12,256 @@ import {
   Mail,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/lib/AuthContext";
 
-const DEMO_EMAIL = "demo@brandpulse.io";
-const DEMO_PASSWORD = "BrandPulse2024!";
-
-// Mock user credentials for demo
-const VALID_CREDENTIALS = [
-  {
-    email: "demo@brandpulse.io",
-    password: "BrandPulse2024!",
-    role: "client",
-    name: "Demo User",
-  },
-  {
-    email: "admin@brandpulse.io",
-    password: "Admin123!",
-    role: "admin",
-    name: "Admin User",
-  },
-  {
-    email: "client@brandpulse.io",
-    password: "Client123!",
-    role: "client",
-    name: "Test Client",
-  },
-  {
-    email: "john@example.com",
-    password: "password123",
-    role: "client",
-    name: "John Doe",
-  },
-];
-
-// Store current user session in memory
-let currentSession: { email: string; role: string; name: string } | null = null;
+const DEMO_CLIENT = { email: "demo@brandpulse.io", password: "BrandPulse2024!" };
+const DEMO_ADMIN  = { email: "admin@brandpulse.io", password: "Admin123!" };
 
 export default function SignIn() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { login } = useAuth();
+
   const [form, setForm] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [demoLoading, setDemoLoading] = useState(false);
+
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
   const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // Check credentials
-    const user = VALID_CREDENTIALS.find(
-      (cred) => cred.email === form.email && cred.password === form.password,
-    );
-
-    if (user) {
-      // Store session
-      currentSession = {
-        email: user.email,
-        role: user.role,
-        name: user.name,
-      };
-
-      // Store in localStorage for persistence across refreshes
-      localStorage.setItem("userRole", user.role);
-      localStorage.setItem("userEmail", user.email);
-      localStorage.setItem("userName", user.name);
-      localStorage.setItem("isAuthenticated", "true");
-
-      toast({
-        title: "Welcome back!",
-        description: `Signed in as ${user.name}`,
-      });
-
-      navigate("/dashboard");
-    } else {
+    try {
+      await login(form.email, form.password);
+      toast({ title: "Welcome back!", description: "Login successful." });
+      const role = localStorage.getItem("userRole");
+      navigate(role === "admin" ? "/admin" : "/dashboard");
+    } catch (err: any) {
       toast({
         title: "Login failed",
-        description: "Invalid email or password. Please try again.",
+        description: err?.response?.message ?? err?.message ?? "Invalid email or password",
         variant: "destructive",
       });
+    } finally {
       setLoading(false);
     }
   };
 
-  const handleDemoLogin = async () => {
-    setDemoLoading(true);
-
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
-    // Check demo credentials
-    const demoUser = VALID_CREDENTIALS.find(
-      (cred) => cred.email === DEMO_EMAIL && cred.password === DEMO_PASSWORD,
-    );
-
-    if (demoUser) {
-      // Store session
-      currentSession = {
-        email: demoUser.email,
-        role: demoUser.role,
-        name: demoUser.name,
-      };
-
-      // Store in localStorage
-      localStorage.setItem("userRole", demoUser.role);
-      localStorage.setItem("userEmail", demoUser.email);
-      localStorage.setItem("userName", demoUser.name);
-      localStorage.setItem("isAuthenticated", "true");
-
+  const quickLogin = async (creds: { email: string; password: string }) => {
+    setForm(creds);
+    setLoading(true);
+    try {
+      await login(creds.email, creds.password);
+      toast({ title: "Welcome back!", description: "Login successful." });
+      const role = localStorage.getItem("userRole");
+      navigate(role === "admin" ? "/admin" : "/dashboard");
+    } catch (err: any) {
       toast({
-        title: "Welcome to the demo!",
-        description: "You're now signed in with demo credentials.",
+        title: "Login failed",
+        description: err?.response?.message ?? err?.message ?? "Invalid credentials",
+        variant: "destructive",
       });
-
-      navigate("/dashboard");
-    } else {
-      // If demo user doesn't exist, redirect to demo page
-      navigate("/demo");
+    } finally {
+      setLoading(false);
     }
-
-    setDemoLoading(false);
-  };
-
-  const fillDemo = () => {
-    setForm({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
-      {/* Left panel — branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary via-primary/90 to-accent flex-col justify-between p-12 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-20 left-20 w-64 h-64 rounded-full bg-white" />
-          <div className="absolute bottom-20 right-10 w-48 h-48 rounded-full bg-white" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-white" />
-        </div>
+    <div className="min-h-screen flex">
+      {/* ── Left panel ── */}
+      <div className="hidden lg:flex lg:w-[48%] relative overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 flex-col p-10">
+        {/* Decorative circles */}
+        <div className="absolute top-[-80px] left-[-80px] w-[380px] h-[380px] rounded-full bg-white/10" />
+        <div className="absolute bottom-[-60px] right-[-60px] w-[320px] h-[320px] rounded-full bg-white/10" />
+        <div className="absolute top-[35%] left-[30%] w-[220px] h-[220px] rounded-full bg-white/5" />
 
-        <Link to="/" className="relative flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
+        {/* Logo */}
+        <div className="relative flex items-center gap-2.5 mb-auto">
+          <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
             <BarChart3 className="w-5 h-5 text-white" />
           </div>
-          <span className="font-heading font-extrabold text-xl text-white">
-            BrandPulse
-          </span>
-        </Link>
-
-        <div className="relative space-y-6">
-          <h2 className="font-heading text-4xl font-extrabold text-white leading-tight">
-            Welcome back to
-            <br />
-            your Brand Hub
-          </h2>
-          <p className="text-white/80 text-lg max-w-sm">
-            Track campaigns, manage influencers, and grow your brand — all in
-            one place.
-          </p>
-
-          <div className="grid grid-cols-2 gap-4 pt-4">
-            {[
-              { label: "Active Clients", value: "500+" },
-              { label: "Campaigns Tracked", value: "12K+" },
-              { label: "Avg ROI Boost", value: "3.2×" },
-              { label: "Influencers", value: "8K+" },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                className="bg-white/10 backdrop-blur-sm rounded-xl p-4"
-              >
-                <p className="font-heading font-bold text-2xl text-white">
-                  {stat.value}
-                </p>
-                <p className="text-white/70 text-sm">{stat.label}</p>
-              </div>
-            ))}
-          </div>
+          <span className="text-white font-bold text-lg">BrandPulse</span>
         </div>
 
-        <p className="relative text-white/50 text-sm">
+        {/* Hero text */}
+        <div className="relative mt-16 mb-10">
+          <h1 className="text-4xl font-bold text-white leading-tight mb-4">
+            Welcome back to<br />your Brand Hub
+          </h1>
+          <p className="text-white/70 text-base leading-relaxed">
+            Track campaigns, manage influencers, and<br />
+            grow your brand — all in one place.
+          </p>
+        </div>
+
+        {/* Stats grid */}
+        <div className="relative grid grid-cols-2 gap-3 mb-auto">
+          {[
+            { value: "500+", label: "Active Clients" },
+            { value: "12K+", label: "Campaigns Tracked" },
+            { value: "3.2x", label: "Avg ROI Boost" },
+            { value: "8K+", label: "Influencers" },
+          ].map((s) => (
+            <div
+              key={s.label}
+              className="bg-white/15 backdrop-blur-sm rounded-xl px-5 py-4 border border-white/10"
+            >
+              <p className="text-white font-bold text-xl">{s.value}</p>
+              <p className="text-white/60 text-xs mt-0.5">{s.label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <p className="relative text-white/40 text-xs mt-10">
           © 2026 BrandPulse. All rights reserved.
         </p>
       </div>
 
-      {/* Right panel — login form */}
-      <div className="flex-1 flex flex-col justify-center items-center px-6 py-12">
-        <div className="w-full max-w-md">
-          {/* Mobile logo */}
-          <div className="lg:hidden flex items-center gap-2 mb-8">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-              <BarChart3 className="w-5 h-5 text-white" />
-            </div>
-            <span className="font-heading font-extrabold text-lg">
-              BrandPulse
-            </span>
-          </div>
+      {/* ── Right panel ── */}
+      <div className="flex-1 bg-gray-50 flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-[420px]">
+          {/* Heading */}
+          <h2 className="text-3xl font-bold text-gray-900 mb-1">Sign in</h2>
+          <p className="text-gray-500 text-sm mb-7">
+            Enter your credentials to access your dashboard.
+          </p>
 
-          <div className="mb-8">
-            <h1 className="font-heading text-3xl font-extrabold tracking-tight">
-              Sign in
-            </h1>
-            <p className="text-muted-foreground mt-2">
-              Enter your credentials to access your dashboard.
-            </p>
-          </div>
-
-          {/* Demo credentials card */}
-          <div className="mb-6 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Zap className="w-4 h-4 text-amber-600" />
-              <p className="text-sm font-heading font-bold text-amber-800">
-                Try the Demo
-              </p>
+          {/* Try the Demo card */}
+          <div className="border border-amber-300 bg-amber-50 rounded-xl p-4 mb-6">
+            <div className="flex items-center gap-2 mb-1">
+              <Zap className="w-4 h-4 text-amber-500" />
+              <span className="font-semibold text-gray-900 text-sm">Try the Demo</span>
             </div>
-            <p className="text-xs text-amber-700 mb-3">
+            <p className="text-amber-600 text-xs mb-3">
               Explore BrandPulse with these demo credentials:
             </p>
-            <div className="space-y-1.5 mb-3">
-              <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
-                <div className="flex items-center gap-2 text-xs font-mono">
-                  <Mail className="w-3 h-3 text-amber-500" />
-                  <span className="text-amber-900 font-medium">
-                    {DEMO_EMAIL}
-                  </span>
-                </div>
+            <div className="space-y-2 mb-3">
+              <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-gray-200">
+                <Mail className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                <span className="text-gray-700 text-xs">{DEMO_CLIENT.email}</span>
               </div>
-              <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2">
-                <div className="flex items-center gap-2 text-xs font-mono">
-                  <Lock className="w-3 h-3 text-amber-500" />
-                  <span className="text-amber-900 font-medium">
-                    {DEMO_PASSWORD}
-                  </span>
-                </div>
+              <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-gray-200">
+                <Lock className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                <span className="text-gray-700 text-xs">{DEMO_CLIENT.password}</span>
               </div>
             </div>
             <div className="flex gap-2">
-              <Button
+              <button
                 type="button"
-                onClick={fillDemo}
-                variant="outline"
-                className="flex-1 h-9 rounded-xl border-amber-300 text-amber-800 hover:bg-amber-100 text-xs"
+                onClick={() => setForm(DEMO_CLIENT)}
+                className="flex-1 text-xs font-medium py-2 rounded-lg border border-amber-400 text-amber-700 bg-white hover:bg-amber-50 transition-colors"
               >
                 Fill Credentials
-              </Button>
-              <Button
+              </button>
+              <button
                 type="button"
-                onClick={handleDemoLogin}
-                disabled={demoLoading}
-                className="flex-1 h-9 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-medium"
+                disabled={loading}
+                onClick={() => quickLogin(DEMO_CLIENT)}
+                className="flex-1 text-xs font-semibold py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors flex items-center justify-center gap-1.5 disabled:opacity-60"
               >
-                {demoLoading ? (
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                {loading ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <>
-                    <Zap className="w-3.5 h-3.5 mr-1" />
+                    <Zap className="w-3.5 h-3.5" />
                     Quick Login
                   </>
                 )}
-              </Button>
+              </button>
             </div>
           </div>
 
-          <div className="relative mb-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border" />
-            </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="bg-background px-3 text-muted-foreground">
-                or sign in with your account
-              </span>
-            </div>
+          {/* Divider */}
+          <div className="flex items-center gap-3 mb-6">
+            <div className="flex-1 h-px bg-gray-200" />
+            <span className="text-xs text-gray-400">or sign in with your account</span>
+            <div className="flex-1 h-px bg-gray-200" />
           </div>
 
+          {/* Sign-in form */}
           <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Email</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="email" className="text-gray-700 text-sm font-medium">
+                Email
+              </Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <Input
+                  id="email"
+                  name="email"
                   type="email"
+                  autoComplete="email"
                   required
                   value={form.email}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    setForm((p) => ({ ...p, email: e.target.value }))
-                  }
+                  onChange={handleChange}
+                  className="pl-10 bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 rounded-lg focus:border-violet-500 focus:ring-violet-500"
                   placeholder="you@company.com"
-                  className="pl-10 rounded-xl h-11"
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Password</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className="text-gray-700 text-sm font-medium">
+                Password
+              </Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <Input
+                  id="password"
+                  name="password"
                   type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
                   required
                   value={form.password}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    setForm((p) => ({ ...p, password: e.target.value }))
-                  }
+                  onChange={handleChange}
+                  className="pl-10 pr-10 bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 rounded-lg focus:border-violet-500 focus:ring-violet-500"
                   placeholder="Enter your password"
-                  className="pl-10 pr-10 rounded-xl h-11"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
 
-            <Button
+            <button
               type="submit"
               disabled={loading}
-              className="w-full h-11 rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90 text-base font-medium"
+              className="w-full h-12 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-semibold text-base flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-60 mt-2"
             >
               {loading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                  Signing in...
-                </>
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
-                  Sign In <ArrowRight className="w-4 h-4 ml-1" />
+                  Sign In <ArrowRight className="w-4 h-4" />
                 </>
               )}
-            </Button>
+            </button>
           </form>
 
-          <p className="text-center text-sm text-muted-foreground mt-6">
+          {/* Footer links */}
+          <p className="text-center text-gray-500 text-sm mt-6">
             Don't have an account?{" "}
-            <Link
-              to="/register"
-              className="text-primary font-medium hover:underline"
-            >
+            <Link to="/register" className="text-violet-600 hover:text-violet-700 font-medium">
               Get started free
             </Link>
           </p>
-          <p className="text-center text-sm text-muted-foreground mt-2">
-            <Link
-              to="/demo"
-              className="text-muted-foreground hover:text-foreground hover:underline text-xs"
+          <p className="text-center mt-2">
+            <button
+              type="button"
+              onClick={() => quickLogin(DEMO_ADMIN)}
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
             >
               View interactive demo instead →
-            </Link>
+            </button>
           </p>
         </div>
       </div>
-
-      {/* Optional: Display debug info in development */}
-      {process.env.NODE_ENV === "development" && (
-        <div className="fixed bottom-4 right-4 p-2 bg-black/80 text-white text-xs rounded-lg">
-          Demo Credentials: demo@brandpulse.io / BrandPulse2024!
-        </div>
-      )}
     </div>
   );
 }

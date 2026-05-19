@@ -1,4 +1,6 @@
-import { useState, useEffect, type FormEvent, type ChangeEvent } from "react";
+import { useState, type FormEvent, type ChangeEvent } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { AdminAPI } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +26,7 @@ import {
   User,
   MoreVertical,
   Trash2,
+  ToggleLeft,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -34,168 +37,108 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import moment from "moment";
 
-interface User {
-  id: string;
-  full_name: string;
-  email: string;
-  role: "admin" | "user";
-  created_date: string;
-}
-
-const roleColors = {
+const roleClass = {
   admin: "bg-violet-500/10 text-violet-600",
   user: "bg-blue-500/10 text-blue-600",
 };
 
-// Static user data
-const STATIC_USERS: User[] = [
-  {
-    id: "1",
-    full_name: "John Admin",
-    email: "john.admin@brandpulse.com",
-    role: "admin",
-    created_date: "2026-01-15T10:00:00Z",
-  },
-  {
-    id: "2",
-    full_name: "Sarah Client",
-    email: "sarah.client@brandpulse.com",
-    role: "user",
-    created_date: "2026-01-20T10:00:00Z",
-  },
-  {
-    id: "3",
-    full_name: "Mike Johnson",
-    email: "mike.johnson@brandpulse.com",
-    role: "user",
-    created_date: "2026-01-25T10:00:00Z",
-  },
-  {
-    id: "4",
-    full_name: "Emma Wilson",
-    email: "emma.wilson@brandpulse.com",
-    role: "user",
-    created_date: "2026-02-01T10:00:00Z",
-  },
-  {
-    id: "5",
-    full_name: "David Chen",
-    email: "david.chen@brandpulse.com",
-    role: "admin",
-    created_date: "2026-02-05T10:00:00Z",
-  },
-  {
-    id: "6",
-    full_name: "Lisa Thompson",
-    email: "lisa.thompson@brandpulse.com",
-    role: "user",
-    created_date: "2026-02-10T10:00:00Z",
-  },
-];
-
-// Store users in memory (simulating database)
-let usersStore: User[] = [...STATIC_USERS];
-let pendingInvites: any[] = [];
+const EMPTY_FORM = {
+  name: "",
+  email: "",
+  password: "",
+  role: "user" as "admin" | "user",
+  tenant_id: "",
+};
 
 export default function UserManagement() {
   const { toast } = useToast();
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
   const [search, setSearch] = useState("");
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ email: "", role: "user" });
-  const [inviting, setInviting] = useState(false);
+  const [page, setPage] = useState(1);
+  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
 
-  const loadUsers = async () => {
-    // Simulate API loading delay
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    setUsers([...usersStore]);
-    setLoading(false);
-  };
+  // ── Queries ────────────────────────────────────────────────────────────────
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-users", search, roleFilter, page],
+    queryFn: () =>
+      AdminAPI.listUsers({
+        search: search || undefined,
+        role: roleFilter !== "all" ? roleFilter : undefined,
+        page,
+        per_page: 15,
+      }).then((r: any) => r),
+    staleTime: 30_000,
+  });
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
+  // Fetch tenants for the create-user form dropdown
+  const { data: tenantsData } = useQuery({
+    queryKey: ["admin-clients-all"],
+    queryFn: () =>
+      AdminAPI.listClients({ per_page: 100 }).then((r: any) => r.data),
+    staleTime: 120_000,
+  });
 
-  const handleInvite = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setInviting(true);
+  const users: any[] = (data as any)?.data ?? [];
+  const meta: any = (data as any)?.meta ?? {};
+  const tenants: any[] = tenantsData ?? [];
 
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+  // ── Mutations ──────────────────────────────────────────────────────────────
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["admin-users"] });
 
-    try {
-      // Check if user already exists
-      const existingUser = usersStore.find((u) => u.email === inviteForm.email);
-
-      if (existingUser) {
-        toast({
-          title: "User already exists",
-          description: `${inviteForm.email} is already registered.`,
-          variant: "destructive",
-        });
-      } else {
-        // Create new user
-        const newUser: User = {
-          id: Math.random().toString(36).substr(2, 9),
-          full_name: "",
-          email: inviteForm.email,
-          role: inviteForm.role as "admin" | "user",
-          created_date: new Date().toISOString(),
-        };
-
-        usersStore.push(newUser);
-        setUsers([...usersStore]);
-
-        // Store pending invite
-        pendingInvites.push({
-          email: inviteForm.email,
-          role: inviteForm.role,
-          invited_at: new Date().toISOString(),
-        });
-
-        toast({
-          title: "Invitation sent!",
-          description: `An invite was sent to ${inviteForm.email}`,
-        });
-
-        setInviteOpen(false);
-        setInviteForm({ email: "", role: "user" });
-      }
-    } catch (err: any) {
+  const createMutation = useMutation({
+    mutationFn: (body: any) => AdminAPI.createUser(body),
+    onSuccess: () => {
+      toast({ title: "User created!" });
+      invalidate();
+      setCreateOpen(false);
+      setForm(EMPTY_FORM);
+    },
+    onError: (e: any) =>
       toast({
-        title: "Failed to invite",
-        description: err?.message || "Please try again.",
+        title: "Error",
+        description: e?.response?.message ?? e.message,
         variant: "destructive",
-      });
-    }
+      }),
+  });
 
-    setInviting(false);
+  const toggleMutation = useMutation({
+    mutationFn: (id: string) => AdminAPI.toggleActive(id),
+    onSuccess: (res: any) => {
+      toast({ title: res.data?.message ?? "Updated" });
+      invalidate();
+    },
+    onError: (e: any) =>
+      toast({
+        title: "Error",
+        description: e?.response?.message ?? e.message,
+        variant: "destructive",
+      }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => AdminAPI.deleteUser(id),
+    onSuccess: () => {
+      toast({ title: "User deleted" });
+      invalidate();
+    },
+    onError: (e: any) =>
+      toast({
+        title: "Error",
+        description: e?.response?.message ?? e.message,
+        variant: "destructive",
+      }),
+  });
+
+  const handleCreate = async (e: FormEvent) => {
+    e.preventDefault();
+    await createMutation.mutateAsync(form);
   };
 
-  const handleRoleChange = async (
-    userId: string,
-    newRole: "admin" | "user",
-  ) => {
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    const userIndex = usersStore.findIndex((u) => u.id === userId);
-    if (userIndex !== -1) {
-      usersStore[userIndex] = { ...usersStore[userIndex], role: newRole };
-      setUsers([...usersStore]);
-    }
-
-    toast({ title: `Role updated to ${newRole}` });
-  };
-
-  const filtered = users.filter(
-    (u) =>
-      u.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-      u.email?.toLowerCase().includes(search.toLowerCase()),
-  );
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
@@ -205,236 +148,305 @@ export default function UserManagement() {
 
   return (
     <div className="p-6 lg:p-8 space-y-6 pb-24 md:pb-8">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="font-heading text-2xl lg:text-3xl font-extrabold tracking-tight">
             User Management
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Invite and manage platform users
+            {meta.total ?? users.length} total users
           </p>
         </div>
         <Button
-          onClick={() => setInviteOpen(true)}
           className="rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90"
+          onClick={() => setCreateOpen(true)}
         >
-          <UserPlus className="w-4 h-4 mr-2" /> Invite User
+          <UserPlus className="w-4 h-4 mr-2" /> Add User
         </Button>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <div className="bg-card rounded-2xl border p-4">
-          <p className="text-2xl font-heading font-extrabold">{users.length}</p>
-          <p className="text-sm text-muted-foreground">Total Users</p>
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Search users…"
+            className="pl-10 rounded-xl"
+          />
         </div>
-        <div className="bg-card rounded-2xl border p-4">
-          <p className="text-2xl font-heading font-extrabold">
-            {users.filter((u) => u.role === "admin").length}
-          </p>
-          <p className="text-sm text-muted-foreground">Admins</p>
-        </div>
-        <div className="bg-card rounded-2xl border p-4 col-span-2 sm:col-span-1">
-          <p className="text-2xl font-heading font-extrabold">
-            {users.filter((u) => u.role === "user").length}
-          </p>
-          <p className="text-sm text-muted-foreground">Regular Users</p>
-        </div>
+        <Select
+          value={roleFilter}
+          onValueChange={(v) => {
+            setRoleFilter(v);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="w-36 rounded-xl">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Roles</SelectItem>
+            <SelectItem value="admin">Admin</SelectItem>
+            <SelectItem value="user">User</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e: ChangeEvent<HTMLInputElement>) =>
-            setSearch(e.target.value)
-          }
-          placeholder="Search users..."
-          className="pl-10 rounded-xl"
-        />
-      </div>
-
-      <div className="bg-card rounded-2xl border overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">
-                  User
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">
-                  Email
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">
-                  Role
-                </th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">
-                  Joined
-                </th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((u) => (
-                <tr
-                  key={u.id}
-                  className="border-b last:border-0 hover:bg-muted/30"
-                >
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center text-primary font-bold text-xs font-heading shrink-0">
-                        {u.full_name?.[0]?.toUpperCase() || "?"}
-                      </div>
-                      <span className="font-medium">{u.full_name || "—"}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
-                  <td className="px-4 py-3">
-                    <Badge
-                      variant="secondary"
-                      className={`capitalize text-xs ${roleColors[u.role] || "bg-muted"}`}
+      {/* Table */}
+      {users.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <User className="w-12 h-12 mx-auto mb-3 opacity-30" />
+          <p className="text-lg font-medium">No users found</p>
+        </div>
+      ) : (
+        <div className="bg-card rounded-2xl border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b bg-muted/30">
+                <tr>
+                  {[
+                    "User",
+                    "Email",
+                    "Company",
+                    "Role",
+                    "Status",
+                    "Joined",
+                    "Actions",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide"
                     >
-                      {u.role === "admin" ? (
-                        <Shield className="w-3 h-3 mr-1" />
-                      ) : (
-                        <User className="w-3 h-3 mr-1" />
-                      )}
-                      {u.role}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">
-                    {moment(u.created_date).format("MMM D, YYYY")}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="rounded-lg h-8 w-8"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {u.role !== "admin" && (
-                          <DropdownMenuItem
-                            onClick={() => handleRoleChange(u.id, "admin")}
-                          >
-                            <Shield className="w-4 h-4 mr-2 text-violet-600" />{" "}
-                            Make Admin
-                          </DropdownMenuItem>
-                        )}
-                        {u.role !== "user" && (
-                          <DropdownMenuItem
-                            onClick={() => handleRoleChange(u.id, "user")}
-                          >
-                            <User className="w-4 h-4 mr-2 text-blue-600" /> Make
-                            Regular User
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </td>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {filtered.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground">
-            <User className="w-10 h-10 mx-auto mb-2 opacity-30" />
-            <p>No users found</p>
+              </thead>
+              <tbody>
+                {users.map((user: any) => (
+                  <tr
+                    key={user.id}
+                    className="border-b last:border-0 hover:bg-muted/20 transition-colors"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
+                          {user.name?.[0]?.toUpperCase()}
+                        </div>
+                        <p className="font-medium">{user.name}</p>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      <a
+                        href={`mailto:${user.email}`}
+                        className="hover:text-primary transition-colors"
+                      >
+                        {user.email}
+                      </a>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground text-xs">
+                      {user.tenant?.company_name ?? "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge
+                        variant="secondary"
+                        className={`text-xs ${roleClass[user.role as "admin" | "user"] ?? "bg-muted"}`}
+                      >
+                        {user.role === "admin" ? (
+                          <>
+                            <Shield className="w-3 h-3 inline mr-1" />
+                            Admin
+                          </>
+                        ) : (
+                          <>
+                            <User className="w-3 h-3 inline mr-1" />
+                            User
+                          </>
+                        )}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge
+                        variant="secondary"
+                        className={`text-xs ${
+                          user.is_active
+                            ? "bg-emerald-500/10 text-emerald-600"
+                            : "bg-red-500/10 text-red-600"
+                        }`}
+                      >
+                        {user.is_active ? "Active" : "Inactive"}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground text-xs">
+                      {user.created_at
+                        ? moment(user.created_at).format("D MMM YYYY")
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="rounded-xl h-8 w-8"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => toggleMutation.mutate(user.id)}
+                          >
+                            <ToggleLeft className="w-4 h-4 mr-2" />
+                            {user.is_active ? "Deactivate" : "Activate"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => deleteMutation.mutate(user.id)}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        )}
-      </div>
 
-      {/* Invite Dialog */}
-      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-heading">Invite a User</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleInvite} className="space-y-4 mt-2">
-            <div className="space-y-2">
-              <Label>Email Address *</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  type="email"
-                  required
-                  value={inviteForm.email}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    setInviteForm((p) => ({ ...p, email: e.target.value }))
-                  }
-                  placeholder="user@company.com"
-                  className="pl-10 rounded-xl"
-                />
+          {/* Pagination */}
+          {meta.last_page > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20">
+              <p className="text-xs text-muted-foreground">
+                Page {meta.current_page} of {meta.last_page} · {meta.total}{" "}
+                total
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-lg text-xs"
+                  disabled={page === 1}
+                  onClick={() => setPage((p) => p - 1)}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-lg text-xs"
+                  disabled={page === meta.last_page}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Next
+                </Button>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Role</Label>
-              <Select
-                value={inviteForm.role}
-                onValueChange={(v: string) =>
-                  setInviteForm((p) => ({ ...p, role: v }))
+          )}
+        </div>
+      )}
+
+      {/* Create User Dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Add New User</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>Full Name *</Label>
+              <Input
+                required
+                value={form.name}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setForm((p) => ({ ...p, name: e.target.value }))
                 }
-              >
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user">
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4" /> Regular User (Client)
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="admin">
-                    <div className="flex items-center gap-2">
-                      <Shield className="w-4 h-4" /> Admin
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Regular users access the client dashboard. Admins can manage the
-                platform.
-              </p>
+                className="rounded-xl"
+                placeholder="Jane Smith"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email *</Label>
+              <Input
+                required
+                type="email"
+                value={form.email}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setForm((p) => ({ ...p, email: e.target.value }))
+                }
+                className="rounded-xl"
+                placeholder="jane@company.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Password *</Label>
+              <Input
+                required
+                type="password"
+                value={form.password}
+                placeholder="Min 8 characters"
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setForm((p) => ({ ...p, password: e.target.value }))
+                }
+                className="rounded-xl"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Role *</Label>
+                <Select
+                  value={form.role}
+                  onValueChange={(v: "admin" | "user") =>
+                    setForm((p) => ({ ...p, role: v }))
+                  }
+                >
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">User</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Client *</Label>
+                <Select
+                  value={form.tenant_id}
+                  onValueChange={(v) =>
+                    setForm((p) => ({ ...p, tenant_id: v }))
+                  }
+                >
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tenants.map((t: any) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.company_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <Button
               type="submit"
-              disabled={inviting}
+              disabled={createMutation.isPending}
               className="w-full rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90"
             >
-              {inviting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <UserPlus className="w-4 h-4 mr-2" />
-                  Send Invitation
-                </>
-              )}
+              {createMutation.isPending ? "Creating…" : "Create User"}
             </Button>
           </form>
         </DialogContent>
       </Dialog>
-
-      {/* Optional: Display debug info in development */}
-      {process.env.NODE_ENV === "development" && (
-        <div className="mt-4 p-3 bg-muted rounded-xl text-xs text-muted-foreground text-center">
-          <p>
-            Demo Mode: {users.length} total users (
-            {users.filter((u) => u.role === "admin").length} admins,{" "}
-            {users.filter((u) => u.role === "user").length} regular users)
-          </p>
-          <p className="mt-1">Pending invites: {pendingInvites.length}</p>
-        </div>
-      )}
     </div>
   );
 }

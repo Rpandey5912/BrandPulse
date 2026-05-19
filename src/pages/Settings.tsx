@@ -1,138 +1,87 @@
 import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { SettingsAPI } from "@/lib/api";
+import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import { User, Mail, Phone, Building } from "lucide-react";
+import { User, Mail, Phone, Building, Lock } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
-interface User {
-  id: string;
-  full_name: string;
-  email: string;
-  role: string;
-  company_name?: string;
-  phone?: string;
-}
-
-// Mock user data
-const MOCK_USER: User = {
-  id: "1",
-  full_name: "John Client",
-  email: "john.client@brandpulse.com",
-  role: "client",
-  company_name: "TechCorp Solutions",
-  phone: "+1 (555) 123-4567",
-};
-
-// Alternative admin user for testing
-const MOCK_ADMIN_USER: User = {
-  id: "2",
-  full_name: "Sarah Admin",
-  email: "sarah.admin@brandpulse.com",
-  role: "admin",
-  company_name: "BrandPulse",
-  phone: "+1 (555) 987-6543",
-};
-
-// Store user settings in memory (simulating database)
-let userSettings: Partial<User> = {};
-
 export default function Settings() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ company_name: "", phone: "" });
   const { toast } = useToast();
+  const { user, tenant } = useAuth();
 
+  const [profileForm, setProfileForm] = useState({ name: "", phone: "" });
+  const [pwForm, setPwForm] = useState({
+    current_password: "",
+    password: "",
+    password_confirmation: "",
+  });
+  const [pwSection, setPwSection] = useState(false);
+
+  // Populate form from auth context
   useEffect(() => {
-    // Simulate API call to get current user
-    const loadUser = async () => {
-      await new Promise((resolve) => setTimeout(resolve, 800));
-
-      // You can switch between client and admin by changing which user you return
-      // For demo purposes, let's check localStorage or use a default
-      const savedRole = localStorage.getItem("userRole");
-      let currentUser: User;
-
-      if (savedRole === "admin") {
-        currentUser = MOCK_ADMIN_USER;
-      } else {
-        currentUser = MOCK_USER;
-      }
-
-      setUser(currentUser);
-      setForm({
-        company_name: currentUser.company_name || "",
-        phone: currentUser.phone || "",
-      });
-      setLoading(false);
-    };
-
-    loadUser();
-  }, []);
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // Update user settings in memory
     if (user) {
-      userSettings = {
-        ...userSettings,
-        company_name: form.company_name,
-        phone: form.phone,
-      };
-
-      console.log("Settings saved:", {
-        company_name: form.company_name,
-        phone: form.phone,
+      setProfileForm({
+        name: user.name ?? "",
+        phone: (user as any).phone ?? "",
       });
     }
+  }, [user]);
 
-    toast({ title: "Settings saved!" });
-    setSaving(false);
+  // ── Mutations ──────────────────────────────────────────────────────────────
+  const updateProfile = useMutation({
+    mutationFn: (body: any) => SettingsAPI.updateProfile(body),
+    onSuccess: () => toast({ title: "Profile saved!" }),
+    onError: (e: any) =>
+      toast({
+        title: "Error",
+        description: e?.response?.message ?? e.message,
+        variant: "destructive",
+      }),
+  });
+
+  const updatePassword = useMutation({
+    mutationFn: (body: any) => SettingsAPI.updatePassword(body),
+    onSuccess: () => {
+      toast({ title: "Password updated!" });
+      setPwForm({
+        current_password: "",
+        password: "",
+        password_confirmation: "",
+      });
+      setPwSection(false);
+    },
+    onError: (e: any) =>
+      toast({
+        title: "Error",
+        description: e?.response?.message ?? e.message,
+        variant: "destructive",
+      }),
+  });
+
+  const handleProfileSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await updateProfile.mutateAsync(profileForm);
   };
 
-  // Function to toggle between admin and client for demo purposes
-  const toggleUserRole = () => {
-    if (user?.role === "admin") {
-      localStorage.setItem("userRole", "client");
-      setUser(MOCK_USER);
-      setForm({
-        company_name: MOCK_USER.company_name || "",
-        phone: MOCK_USER.phone || "",
-      });
-    } else {
-      localStorage.setItem("userRole", "admin");
-      setUser(MOCK_ADMIN_USER);
-      setForm({
-        company_name: MOCK_ADMIN_USER.company_name || "",
-        phone: MOCK_ADMIN_USER.phone || "",
-      });
+  const handlePasswordSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pwForm.password !== pwForm.password_confirmation) {
+      toast({ title: "Passwords do not match", variant: "destructive" });
+      return;
     }
-    toast({
-      title: `Switched to ${user?.role === "admin" ? "Client" : "Admin"} view`,
-    });
+    await updatePassword.mutateAsync(pwForm);
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
 
   const initials =
-    user?.full_name
+    user?.name
       ?.split(" ")
       .map((n) => n[0])
       .join("")
-      .toUpperCase() || "U";
+      .toUpperCase() ?? "U";
 
   return (
     <div className="p-6 lg:p-8 max-w-2xl space-y-8 pb-24 md:pb-8">
@@ -145,6 +94,7 @@ export default function Settings() {
         </p>
       </div>
 
+      {/* Profile Card */}
       <div className="bg-card rounded-2xl border p-6">
         <div className="flex items-center gap-4 mb-6">
           <Avatar className="w-16 h-16">
@@ -154,89 +104,78 @@ export default function Settings() {
           </Avatar>
           <div>
             <h2 className="font-heading font-bold text-lg">
-              {user?.full_name || "User"}
+              {user?.name ?? "User"}
             </h2>
             <p className="text-sm text-muted-foreground">{user?.email}</p>
             <p className="text-xs text-muted-foreground capitalize mt-0.5">
-              Role: {user?.role || "client"}
+              Role: {user?.role ?? "user"}
+              {tenant && ` · ${tenant.company_name}`}
             </p>
           </div>
         </div>
 
-        {/* Demo role switcher - remove in production */}
-        <div className="mb-6 p-3 bg-muted/50 rounded-xl">
-          <p className="text-xs text-muted-foreground mb-2">Demo Mode:</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={toggleUserRole}
-            className="rounded-lg text-xs w-full"
-          >
-            Switch to {user?.role === "admin" ? "Client" : "Admin"} View
-          </Button>
-        </div>
-
-        <form onSubmit={handleSave} className="space-y-4">
+        <form onSubmit={handleProfileSave} className="space-y-4">
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
               <User className="w-4 h-4" /> Full Name
             </Label>
             <Input
-              value={user?.full_name || ""}
-              disabled
-              className="rounded-xl bg-muted"
+              value={profileForm.name}
+              onChange={(e) =>
+                setProfileForm((p) => ({ ...p, name: e.target.value }))
+              }
+              className="rounded-xl"
+              placeholder="Your name"
             />
-            <p className="text-xs text-muted-foreground">
-              Name cannot be changed here.
-            </p>
           </div>
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
               <Mail className="w-4 h-4" /> Email
             </Label>
             <Input
-              value={user?.email || ""}
+              value={user?.email ?? ""}
               disabled
               className="rounded-xl bg-muted"
             />
+            <p className="text-xs text-muted-foreground">
+              Email cannot be changed here.
+            </p>
           </div>
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <Building className="w-4 h-4" /> Company Name
-            </Label>
-            <Input
-              value={form.company_name}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, company_name: e.target.value }))
-              }
-              placeholder="Your company"
-              className="rounded-xl"
-            />
-          </div>
+          {tenant && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Building className="w-4 h-4" /> Company
+              </Label>
+              <Input
+                value={tenant.company_name}
+                disabled
+                className="rounded-xl bg-muted"
+              />
+            </div>
+          )}
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
               <Phone className="w-4 h-4" /> Phone
             </Label>
             <Input
-              value={form.phone}
+              value={profileForm.phone}
               onChange={(e) =>
-                setForm((p) => ({ ...p, phone: e.target.value }))
+                setProfileForm((p) => ({ ...p, phone: e.target.value }))
               }
-              placeholder="+1 (555) 000-0000"
+              placeholder="+44 7700 000000"
               className="rounded-xl"
             />
           </div>
           <Button
             type="submit"
-            disabled={saving}
+            disabled={updateProfile.isPending}
             className="rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90"
           >
-            {saving ? (
-              <div className="flex items-center gap-2">
+            {updateProfile.isPending ? (
+              <span className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Saving...
-              </div>
+                Saving…
+              </span>
             ) : (
               "Save Changes"
             )}
@@ -244,13 +183,123 @@ export default function Settings() {
         </form>
       </div>
 
-      {/* Optional: Display debug info in development */}
-      {import.meta.env.DEV && (
-        <div className="mt-4 p-3 bg-muted rounded-xl text-xs text-muted-foreground text-center">
-          <p>Settings are stored in memory and will reset on page refresh.</p>
-          <p className="mt-1">
-            Use the demo switcher to toggle between client and admin views.
-          </p>
+      {/* Password Card */}
+      <div className="bg-card rounded-2xl border p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-heading font-bold flex items-center gap-2">
+              <Lock className="w-4 h-4" /> Change Password
+            </h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Update your login password
+            </p>
+          </div>
+          {!pwSection && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-xl"
+              onClick={() => setPwSection(true)}
+            >
+              Change
+            </Button>
+          )}
+        </div>
+
+        {pwSection && (
+          <form onSubmit={handlePasswordSave} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Current Password *</Label>
+              <Input
+                type="password"
+                required
+                value={pwForm.current_password}
+                onChange={(e) =>
+                  setPwForm((p) => ({ ...p, current_password: e.target.value }))
+                }
+                className="rounded-xl"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>New Password *</Label>
+              <Input
+                type="password"
+                required
+                value={pwForm.password}
+                onChange={(e) =>
+                  setPwForm((p) => ({ ...p, password: e.target.value }))
+                }
+                className="rounded-xl"
+                placeholder="Min 8 characters"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Confirm New Password *</Label>
+              <Input
+                type="password"
+                required
+                value={pwForm.password_confirmation}
+                onChange={(e) =>
+                  setPwForm((p) => ({
+                    ...p,
+                    password_confirmation: e.target.value,
+                  }))
+                }
+                className="rounded-xl"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                type="submit"
+                disabled={updatePassword.isPending}
+                className="rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90"
+              >
+                {updatePassword.isPending ? "Updating…" : "Update Password"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => setPwSection(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        )}
+      </div>
+
+      {/* Subscription info */}
+      {tenant && (
+        <div className="bg-card rounded-2xl border p-6">
+          <h2 className="font-heading font-bold mb-3">Subscription</h2>
+          <div className="flex items-center gap-3">
+            <span className="capitalize font-semibold text-primary">
+              {tenant.subscription_plan}
+            </span>
+            <span
+              className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                tenant.subscription_status === "active"
+                  ? "bg-emerald-500/10 text-emerald-600"
+                  : "bg-amber-500/10 text-amber-600"
+              }`}
+            >
+              {tenant.subscription_status}
+            </span>
+          </div>
+          {tenant.trial_ends_at && (
+            <p className="text-sm text-muted-foreground mt-1">
+              Trial ends: {new Date(tenant.trial_ends_at).toLocaleDateString()}
+            </p>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-xl mt-3"
+            onClick={() => (window.location.href = "/subscription")}
+          >
+            Manage Subscription
+          </Button>
         </div>
       )}
     </div>

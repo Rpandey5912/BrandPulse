@@ -1,4 +1,6 @@
-import { useState, useEffect, type FormEvent, type ChangeEvent } from "react";
+import { useState, type FormEvent, type ChangeEvent } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { InfluencersAPI, CampaignsAPI, CollabAPI } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +23,6 @@ import { useToast } from "@/components/ui/use-toast";
 import {
   Search,
   Send,
-  Upload,
   Users,
   Clock,
   CheckCircle2,
@@ -31,438 +32,200 @@ import {
   MapPin,
   DollarSign,
   Eye,
+  Upload,
   Paperclip,
 } from "lucide-react";
 
-type Niche =
-  | "Food"
-  | "Travel"
-  | "Technology"
-  | "Fashion"
-  | "Fitness"
-  | "Beauty"
-  | "Gaming"
-  | "Education"
-  | "Finance"
-  | "Lifestyle"
-  | "Entertainment"
-  | "Health";
 type Platform = "Instagram" | "TikTok" | "YouTube" | "LinkedIn" | "Google";
-type RequestStatus =
-  | "pending"
-  | "accepted"
-  | "declined"
-  | "delivered"
-  | "completed";
-
-interface Influencer {
-  id: string;
-  full_name: string;
-  email: string;
-  niche: Niche;
-  location?: string;
-  follower_count: number;
-  engagement_rate: number;
-  rate_per_post: number;
-  platforms: Platform[];
-  bio?: string;
-  portfolio_url?: string;
-  status: string;
-  [key: string]: any;
-}
-
-interface Campaign {
-  id: string;
-  name: string;
-  description?: string;
-  budget?: number;
-  [key: string]: any;
-}
-
-interface CollabRequest {
-  id: string;
-  campaign_id: string;
-  campaign_name: string;
-  influencer_id: string;
-  influencer_name: string;
-  influencer_email: string;
-  message: string;
-  agreed_rate: number;
-  due_date: string | null;
-  status: RequestStatus;
-  deliverable_url?: string;
-  deliverable_notes?: string;
-  [key: string]: any;
-}
-
-interface StatusConfig {
-  label: string;
-  color: string;
-  icon: React.ComponentType<{ className?: string }>;
-}
-
-interface InviteFormData {
-  campaign_id: string;
-  message: string;
-  agreed_rate: string;
-  due_date: string;
-}
-
-// Static data
-const STATIC_INFLUENCERS: Influencer[] = [
-  {
-    id: "1",
-    full_name: "Sarah Johnson",
-    email: "sarah.johnson@example.com",
-    niche: "Fashion",
-    location: "New York, NY",
-    follower_count: 125000,
-    engagement_rate: 4.8,
-    rate_per_post: 850,
-    platforms: ["Instagram", "TikTok"],
-    bio: "Fashion enthusiast sharing style tips and sustainable fashion choices.",
-    portfolio_url: "https://sarahjohnson.com",
-    status: "approved",
-  },
-  {
-    id: "2",
-    full_name: "Mike Chen",
-    email: "mike.chen@example.com",
-    niche: "Technology",
-    location: "San Francisco, CA",
-    follower_count: 89000,
-    engagement_rate: 5.2,
-    rate_per_post: 1200,
-    platforms: ["YouTube", "LinkedIn", "Instagram"],
-    bio: "Tech reviewer and digital creator. Unboxing the latest gadgets.",
-    portfolio_url: "https://mikechen.tech",
-    status: "approved",
-  },
-  {
-    id: "3",
-    full_name: "Emma Rodriguez",
-    email: "emma.rodriguez@example.com",
-    niche: "Fitness",
-    location: "Los Angeles, CA",
-    follower_count: 234000,
-    engagement_rate: 6.1,
-    rate_per_post: 1500,
-    platforms: ["Instagram", "TikTok", "YouTube"],
-    bio: "Certified personal trainer helping you achieve your fitness goals.",
-    portfolio_url: "https://emmafitness.com",
-    status: "approved",
-  },
-  {
-    id: "4",
-    full_name: "David Kim",
-    email: "david.kim@example.com",
-    niche: "Food",
-    location: "Chicago, IL",
-    follower_count: 56700,
-    engagement_rate: 3.9,
-    rate_per_post: 600,
-    platforms: ["Instagram", "YouTube"],
-    bio: "Home chef sharing easy and delicious recipes.",
-    portfolio_url: "https://davidkitchen.com",
-    status: "approved",
-  },
-  {
-    id: "5",
-    full_name: "Lisa Thompson",
-    email: "lisa.thompson@example.com",
-    niche: "Travel",
-    location: "Miami, FL",
-    follower_count: 178000,
-    engagement_rate: 5.5,
-    rate_per_post: 1300,
-    platforms: ["Instagram", "TikTok", "YouTube"],
-    bio: "Travel blogger exploring hidden gems around the world.",
-    portfolio_url: "https://lisatravels.com",
-    status: "approved",
-  },
-];
-
-const STATIC_CAMPAIGNS: Campaign[] = [
-  {
-    id: "1",
-    name: "Summer Launch Campaign",
-    description: "Promoting our new summer product line",
-    budget: 10000,
-  },
-  {
-    id: "2",
-    name: "Holiday Special",
-    description: "Holiday season marketing push",
-    budget: 15000,
-  },
-  {
-    id: "3",
-    name: "Brand Awareness Q1",
-    description: "Increasing brand visibility",
-    budget: 8000,
-  },
-  {
-    id: "4",
-    name: "Influencer Partnership",
-    description: "Collaborating with top influencers",
-    budget: 20000,
-  },
-];
-
-// Store collaboration requests in memory
-let collabRequests: CollabRequest[] = [
-  {
-    id: "1",
-    campaign_id: "1",
-    campaign_name: "Summer Launch Campaign",
-    influencer_id: "1",
-    influencer_name: "Sarah Johnson",
-    influencer_email: "sarah.johnson@example.com",
-    message: "Would love to collaborate on your summer campaign!",
-    agreed_rate: 850,
-    due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    status: "pending",
-  },
-  {
-    id: "2",
-    campaign_id: "2",
-    campaign_name: "Holiday Special",
-    influencer_id: "3",
-    influencer_name: "Emma Rodriguez",
-    influencer_email: "emma.rodriguez@example.com",
-    message: "Great fit for our holiday campaign!",
-    agreed_rate: 1500,
-    due_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-    status: "accepted",
-  },
-];
-
-const nicheColors: Record<Niche, string> = {
-  Food: "bg-amber-500/10 text-amber-700",
-  Travel: "bg-cyan-500/10 text-cyan-700",
-  Technology: "bg-blue-500/10 text-blue-700",
-  Fashion: "bg-rose-500/10 text-rose-700",
-  Fitness: "bg-emerald-500/10 text-emerald-700",
-  Beauty: "bg-pink-500/10 text-pink-700",
-  Gaming: "bg-violet-500/10 text-violet-700",
-  Education: "bg-orange-500/10 text-orange-700",
-  Finance: "bg-green-500/10 text-green-700",
-  Lifestyle: "bg-indigo-500/10 text-indigo-700",
-  Entertainment: "bg-red-500/10 text-red-700",
-  Health: "bg-teal-500/10 text-teal-700",
-};
-
-const statusConfig: Record<RequestStatus, StatusConfig> = {
-  pending: {
-    label: "Pending",
-    color: "bg-amber-500/10 text-amber-700",
-    icon: Clock,
-  },
-  accepted: {
-    label: "Accepted",
-    color: "bg-blue-500/10 text-blue-700",
-    icon: CheckCircle2,
-  },
-  declined: {
-    label: "Declined",
-    color: "bg-red-500/10 text-red-700",
-    icon: XCircle,
-  },
-  delivered: {
-    label: "Delivered",
-    color: "bg-violet-500/10 text-violet-700",
-    icon: PackageCheck,
-  },
-  completed: {
-    label: "Completed",
-    color: "bg-emerald-500/10 text-emerald-700",
-    icon: CheckCircle2,
-  },
-};
 
 const platformIcons: Record<Platform, string> = {
-  Instagram: "📸",
+  Instagram: "🔴",
   TikTok: "🎵",
   YouTube: "▶️",
   LinkedIn: "🔷",
   Google: "🔍",
 };
 
-function formatFollowers(n: number | undefined | null): string {
-  if (!n) return "—";
-  if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
-  if (n >= 1000) return (n / 1000).toFixed(0) + "K";
-  return n.toString();
-}
+const nicheColors: Record<string, string> = {
+  Food: "bg-orange-100 text-orange-700",
+  Travel: "bg-sky-100 text-sky-700",
+  Technology: "bg-blue-100 text-blue-700",
+  Fashion: "bg-pink-100 text-pink-700",
+  Fitness: "bg-green-100 text-green-700",
+  Beauty: "bg-rose-100 text-rose-700",
+  Gaming: "bg-purple-100 text-purple-700",
+  Education: "bg-amber-100 text-amber-700",
+  Finance: "bg-emerald-100 text-emerald-700",
+  Lifestyle: "bg-violet-100 text-violet-700",
+  Entertainment: "bg-red-100 text-red-700",
+  Health: "bg-teal-100 text-teal-700",
+};
+
+const statusConfig: Record<
+  string,
+  { label: string; color: string; icon: any }
+> = {
+  pending: {
+    label: "Pending",
+    color: "bg-amber-500/10 text-amber-600",
+    icon: Clock,
+  },
+  accepted: {
+    label: "Accepted",
+    color: "bg-emerald-500/10 text-emerald-600",
+    icon: CheckCircle2,
+  },
+  declined: {
+    label: "Declined",
+    color: "bg-red-500/10 text-red-600",
+    icon: XCircle,
+  },
+  delivered: {
+    label: "Delivered",
+    color: "bg-blue-500/10 text-blue-600",
+    icon: PackageCheck,
+  },
+  completed: {
+    label: "Completed",
+    color: "bg-violet-500/10 text-violet-600",
+    icon: Star,
+  },
+};
+
+const formatFollowers = (n: number) =>
+  n >= 1_000_000
+    ? `${(n / 1_000_000).toFixed(1)}M`
+    : n >= 1_000
+      ? `${(n / 1_000).toFixed(0)}K`
+      : String(n);
 
 export default function Influencers() {
   const { toast } = useToast();
-  const [influencers, setInfluencers] = useState<Influencer[]>([]);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [requests, setRequests] = useState<CollabRequest[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [search, setSearch] = useState<string>("");
-  const [nicheFilter, setNicheFilter] = useState<string>("all");
+  const queryClient = useQueryClient();
 
-  // Invite dialog
-  const [inviteOpen, setInviteOpen] = useState<boolean>(false);
-  const [selectedInfluencer, setSelectedInfluencer] =
-    useState<Influencer | null>(null);
-  const [inviteForm, setInviteForm] = useState<InviteFormData>({
+  const [search, setSearch] = useState("");
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedInfluencer, setSelectedInfluencer] = useState<any>(null);
+  const [selectedRequest, setSelectedRequest] = useState<any>(null);
+  const [uploadNotes, setUploadNotes] = useState("");
+  const [uploadUrl, setUploadUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  const [inviteForm, setInviteForm] = useState({
     campaign_id: "",
     message: "",
     agreed_rate: "",
     due_date: "",
   });
-  const [inviting, setInviting] = useState<boolean>(false);
 
-  // Upload dialog
-  const [uploadOpen, setUploadOpen] = useState<boolean>(false);
-  const [selectedRequest, setSelectedRequest] = useState<CollabRequest | null>(
-    null,
-  );
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadNotes, setUploadNotes] = useState<string>("");
-  const [uploading, setUploading] = useState<boolean>(false);
-
-  // Detail dialog
-  const [detailOpen, setDetailOpen] = useState<boolean>(false);
-  const [detailInfluencer, setDetailInfluencer] = useState<Influencer | null>(
-    null,
-  );
-
-  const loadAll = async (): Promise<void> => {
-    // Simulate API loading delay
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
-    setInfluencers(STATIC_INFLUENCERS);
-    setCampaigns(STATIC_CAMPAIGNS);
-    setRequests([...collabRequests]);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    loadAll();
-  }, []);
-
-  const allNiches: string[] = [
-    ...new Set(influencers.map((i) => i.niche).filter(Boolean)),
-  ];
-
-  const filtered = influencers.filter((inf) => {
-    const matchSearch =
-      !search ||
-      inf.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-      inf.niche?.toLowerCase().includes(search.toLowerCase());
-    const matchNiche = nicheFilter === "all" || inf.niche === nicheFilter;
-    return matchSearch && matchNiche;
+  // ── Queries ────────────────────────────────────────────────────────────────
+  const { data: influencersData, isLoading: loadingInfluencers } = useQuery({
+    queryKey: ["influencers", search],
+    queryFn: () =>
+      InfluencersAPI.list({
+        status: "approved",
+        search: search || undefined,
+        per_page: 50,
+      }).then((r: any) => r.data),
+    staleTime: 30_000,
   });
 
-  const openInvite = (inf: Influencer): void => {
-    setSelectedInfluencer(inf);
+  const { data: collabData, isLoading: loadingCollabs } = useQuery({
+    queryKey: ["collabs"],
+    queryFn: () => CollabAPI.list({ per_page: 100 }).then((r: any) => r.data),
+    staleTime: 30_000,
+  });
+
+  const { data: campaignsData } = useQuery({
+    queryKey: ["campaigns-list"],
+    queryFn: () =>
+      CampaignsAPI.list({ status: "active", per_page: 100 }).then(
+        (r: any) => r.data,
+      ),
+    staleTime: 60_000,
+  });
+
+  const influencers: any[] = influencersData ?? [];
+  const collabs: any[] = collabData ?? [];
+  const campaigns: any[] = campaignsData ?? [];
+
+  // ── Mutations ──────────────────────────────────────────────────────────────
+  const invalidateCollabs = () =>
+    queryClient.invalidateQueries({ queryKey: ["collabs"] });
+
+  const sendInviteMutation = useMutation({
+    mutationFn: (body: any) => CollabAPI.create(body),
+    onSuccess: () => {
+      toast({ title: "Invite sent!" });
+      invalidateCollabs();
+    },
+    onError: (e: any) =>
+      toast({
+        title: "Error",
+        description: e?.response?.message ?? e.message,
+        variant: "destructive",
+      }),
+  });
+
+  const deliverMutation = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: any }) =>
+      CollabAPI.deliver(id, body),
+    onSuccess: () => {
+      toast({ title: "Deliverable submitted!" });
+      invalidateCollabs();
+    },
+    onError: (e: any) =>
+      toast({
+        title: "Error",
+        description: e?.response?.message ?? e.message,
+        variant: "destructive",
+      }),
+  });
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
+  const openInvite = (influencer: any) => {
+    setSelectedInfluencer(influencer);
     setInviteForm({
       campaign_id: "",
-      message: `Hi ${inf.full_name}, we'd love to collaborate with you on our upcoming campaign!`,
-      agreed_rate: inf.rate_per_post?.toString() || "",
+      message: "",
+      agreed_rate: String(influencer.rate_per_post ?? ""),
       due_date: "",
     });
     setInviteOpen(true);
   };
 
-  const handleInvite = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSendInvite = async (e: FormEvent) => {
     e.preventDefault();
-    setInviting(true);
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const campaign = campaigns.find((c) => c.id === inviteForm.campaign_id);
-    const newRequest: CollabRequest = {
-      id: Math.random().toString(36).substr(2, 9),
+    await sendInviteMutation.mutateAsync({
       campaign_id: inviteForm.campaign_id,
-      campaign_name: campaign?.name || "",
-      influencer_id: selectedInfluencer!.id,
-      influencer_name: selectedInfluencer!.full_name,
-      influencer_email: selectedInfluencer!.email,
+      influencer_id: selectedInfluencer.id,
+      agreed_fee: parseFloat(inviteForm.agreed_rate) || 0,
+      due_date: inviteForm.due_date || undefined,
       message: inviteForm.message,
-      agreed_rate: parseFloat(inviteForm.agreed_rate) || 0,
-      due_date: inviteForm.due_date
-        ? new Date(inviteForm.due_date).toISOString()
-        : null,
-      status: "pending",
-    };
-
-    collabRequests.unshift(newRequest);
-    setRequests([...collabRequests]);
-
-    toast({
-      title: "Invite sent!",
-      description: `${selectedInfluencer!.full_name} has been invited.`,
     });
-
-    setInviting(false);
     setInviteOpen(false);
   };
 
-  const handleStatusChange = async (
-    requestId: string,
-    newStatus: RequestStatus,
-  ): Promise<void> => {
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    const index = collabRequests.findIndex((r) => r.id === requestId);
-    if (index !== -1) {
-      collabRequests[index] = { ...collabRequests[index], status: newStatus };
-      setRequests([...collabRequests]);
-    }
-
-    toast({ title: `Status updated to ${newStatus}` });
-  };
-
-  const openUpload = (req: CollabRequest): void => {
-    setSelectedRequest(req);
-    setUploadFile(null);
-    setUploadNotes("");
-    setUploadOpen(true);
-  };
-
-  const handleUpload = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleUpload = async (e: FormEvent) => {
     e.preventDefault();
-    if (!uploadFile) {
-      toast({ title: "Please select a file", variant: "destructive" });
-      return;
-    }
-
+    if (!selectedRequest || !uploadUrl) return;
     setUploading(true);
-
-    // Simulate file upload
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    // Create a fake file URL
-    const fakeFileUrl = URL.createObjectURL(uploadFile);
-
-    const index = collabRequests.findIndex((r) => r.id === selectedRequest!.id);
-    if (index !== -1) {
-      collabRequests[index] = {
-        ...collabRequests[index],
-        deliverable_url: fakeFileUrl,
-        deliverable_notes: uploadNotes,
-        status: "delivered",
-      };
-      setRequests([...collabRequests]);
+    try {
+      await deliverMutation.mutateAsync({
+        id: selectedRequest.id,
+        body: { deliverable_url: uploadUrl, deliverable_notes: uploadNotes },
+      });
+      setUploadOpen(false);
+      setUploadUrl("");
+      setUploadNotes("");
+    } finally {
+      setUploading(false);
     }
-
-    toast({
-      title: "Deliverable uploaded!",
-      description: "Status updated to Delivered.",
-    });
-
-    setUploading(false);
-    setUploadOpen(false);
   };
 
-  if (loading) {
+  if (loadingInfluencers) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
@@ -477,206 +240,177 @@ export default function Influencers() {
           Influencers
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Browse approved influencers, send invites & track collaborations
+          Manage influencers and collaboration requests
         </p>
       </div>
 
-      <Tabs defaultValue="browse">
+      <Tabs defaultValue="influencers">
         <TabsList className="rounded-xl">
-          <TabsTrigger value="browse" className="rounded-lg">
-            <Users className="w-4 h-4 mr-1.5" /> Browse ({influencers.length})
+          <TabsTrigger value="influencers" className="rounded-lg">
+            <Users className="w-4 h-4 mr-2" /> Influencers
           </TabsTrigger>
-          <TabsTrigger value="requests" className="rounded-lg">
-            <Send className="w-4 h-4 mr-1.5" /> My Requests ({requests.length})
+          <TabsTrigger value="collabs" className="rounded-lg">
+            <Send className="w-4 h-4 mr-2" /> Collab Requests
+            {collabs.filter((c) => c.status === "pending").length > 0 && (
+              <span className="ml-2 bg-amber-500 text-white text-xs rounded-full px-1.5 py-0.5">
+                {collabs.filter((c) => c.status === "pending").length}
+              </span>
+            )}
           </TabsTrigger>
         </TabsList>
 
-        {/* BROWSE TAB */}
-        <TabsContent value="browse" className="space-y-4 mt-4">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1 max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                value={search}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setSearch(e.target.value)
-                }
-                placeholder="Search by name or niche..."
-                className="pl-10 rounded-xl"
-              />
-            </div>
-            <Select value={nicheFilter} onValueChange={setNicheFilter}>
-              <SelectTrigger className="rounded-xl w-44">
-                <SelectValue placeholder="All Niches" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Niches</SelectItem>
-                {allNiches.map((n) => (
-                  <SelectItem key={n} value={n}>
-                    {n}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {/* ── Influencers Tab ────────────────────────────────────────────── */}
+        <TabsContent value="influencers" className="mt-6 space-y-4">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setSearch(e.target.value)
+              }
+              placeholder="Search influencers…"
+              className="pl-10 rounded-xl"
+            />
           </div>
 
-          {filtered.length === 0 ? (
+          {influencers.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">
               <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="font-medium">No approved influencers found</p>
+              <p className="text-lg font-medium">No influencers yet</p>
+              <p className="text-sm mt-1">
+                Approved influencers will appear here.
+              </p>
             </div>
           ) : (
-            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              {filtered.map((inf) => {
-                const myRequests = requests.filter(
-                  (r) => r.influencer_id === inf.id,
-                );
-                return (
-                  <div
-                    key={inf.id}
-                    className="bg-card rounded-2xl border p-5 flex flex-col gap-3 hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center font-heading font-bold text-primary text-lg shrink-0">
-                        {inf.full_name?.[0] || "?"}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-heading font-bold truncate">
-                          {inf.full_name}
-                        </h3>
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
-                          {inf.location && (
-                            <>
-                              <MapPin className="w-3 h-3" />
-                              <span>{inf.location}</span>
-                            </>
-                          )}
-                        </div>
-                        <Badge
-                          variant="secondary"
-                          className={`text-xs mt-1 ${nicheColors[inf.niche] || "bg-muted"}`}
-                        >
-                          {inf.niche}
-                        </Badge>
-                      </div>
+            <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {influencers.map((inf: any) => (
+                <div
+                  key={inf.id}
+                  className="bg-card rounded-2xl border p-5 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center font-heading font-bold text-primary text-xl">
+                      {inf.full_name?.[0]}
                     </div>
-
-                    <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                      <div className="bg-muted/50 rounded-lg py-2">
-                        <p className="font-bold">
-                          {formatFollowers(inf.follower_count)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Followers
-                        </p>
-                      </div>
-                      <div className="bg-muted/50 rounded-lg py-2">
-                        <p className="font-bold">
-                          {inf.engagement_rate
-                            ? `${inf.engagement_rate}%`
-                            : "—"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Engagement
-                        </p>
-                      </div>
-                      <div className="bg-muted/50 rounded-lg py-2">
-                        <p className="font-bold">
-                          {inf.rate_per_post ? `$${inf.rate_per_post}` : "—"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Rate/Post
-                        </p>
-                      </div>
+                    <Badge
+                      variant="secondary"
+                      className={`text-xs ${nicheColors[inf.niche] ?? "bg-muted"}`}
+                    >
+                      {inf.niche}
+                    </Badge>
+                  </div>
+                  <h3 className="font-heading font-bold truncate">
+                    {inf.full_name}
+                  </h3>
+                  {inf.location && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      <MapPin className="w-3 h-3 inline mr-1" />
+                      {inf.location}
+                    </p>
+                  )}
+                  <div className="grid grid-cols-3 gap-2 mt-3 text-center text-sm">
+                    <div className="bg-muted/50 rounded-xl p-2">
+                      <p className="font-bold text-xs">
+                        {formatFollowers(inf.follower_count)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Followers</p>
                     </div>
-
-                    {inf.platforms?.length > 0 && (
-                      <div className="flex gap-1 flex-wrap">
-                        {inf.platforms.map((p) => (
-                          <span key={p} className="text-sm">
-                            {platformIcons[p as Platform] || p}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {myRequests.length > 0 && (
-                      <div className="text-xs text-muted-foreground">
-                        {myRequests.length} active collab
-                        {myRequests.length > 1 ? "s" : ""}
-                      </div>
-                    )}
-
-                    <div className="flex gap-2 mt-auto">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-xl flex-1"
-                        onClick={() => {
-                          setDetailInfluencer(inf);
-                          setDetailOpen(true);
-                        }}
-                      >
-                        <Eye className="w-3.5 h-3.5 mr-1" /> View
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="rounded-xl flex-1 bg-gradient-to-r from-primary to-accent hover:opacity-90"
-                        onClick={() => openInvite(inf)}
-                      >
-                        <Send className="w-3.5 h-3.5 mr-1" /> Invite
-                      </Button>
+                    <div className="bg-muted/50 rounded-xl p-2">
+                      <p className="font-bold text-xs">
+                        {inf.engagement_rate}%
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Engagement
+                      </p>
+                    </div>
+                    <div className="bg-muted/50 rounded-xl p-2">
+                      <p className="font-bold text-xs">£{inf.rate_per_post}</p>
+                      <p className="text-xs text-muted-foreground">Rate</p>
                     </div>
                   </div>
-                );
-              })}
+                  {inf.platforms && inf.platforms.length > 0 && (
+                    <div className="flex gap-1 flex-wrap mt-3">
+                      {inf.platforms.map((p: any) => (
+                        <span
+                          key={p.platform ?? p}
+                          className="bg-muted px-2 py-0.5 rounded-lg text-xs"
+                        >
+                          {platformIcons[p.platform as Platform] ?? ""}{" "}
+                          {p.platform ?? p}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2 mt-4">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 rounded-xl text-xs"
+                      onClick={() => {
+                        setSelectedInfluencer(inf);
+                        setDetailOpen(true);
+                      }}
+                    >
+                      <Eye className="w-3 h-3 mr-1" /> View
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="flex-1 rounded-xl text-xs bg-gradient-to-r from-primary to-accent hover:opacity-90"
+                      onClick={() => openInvite(inf)}
+                    >
+                      <Send className="w-3 h-3 mr-1" /> Invite
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </TabsContent>
 
-        {/* REQUESTS TAB */}
-        <TabsContent value="requests" className="space-y-4 mt-4">
-          {requests.length === 0 ? (
+        {/* ── Collab Requests Tab ───────────────────────────────────────── */}
+        <TabsContent value="collabs" className="mt-6 space-y-4">
+          {loadingCollabs ? (
+            <div className="flex justify-center py-12">
+              <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+            </div>
+          ) : collabs.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">
               <Send className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p className="font-medium">No collaboration requests yet</p>
+              <p className="text-lg font-medium">No collab requests yet</p>
               <p className="text-sm mt-1">
-                Invite an influencer from the Browse tab
+                Send an invite to an influencer to get started.
               </p>
             </div>
           ) : (
-            <div className="grid gap-3">
-              {requests.map((req) => {
-                const sc = statusConfig[req.status];
-                const StatusIcon = sc.icon;
+            <div className="grid gap-4">
+              {collabs.map((req: any) => {
+                const cfg = statusConfig[req.status] ?? statusConfig.pending;
+                const Icon = cfg.icon;
                 return (
                   <div
                     key={req.id}
                     className="bg-card rounded-2xl border p-5 flex flex-col sm:flex-row sm:items-center gap-4"
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-heading font-bold">
-                          {req.influencer_name}
-                        </h3>
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="font-heading font-bold truncate">
+                          {req.influencer?.full_name ?? "Influencer"}
+                        </p>
                         <Badge
                           variant="secondary"
-                          className={`text-xs ${sc.color}`}
+                          className={`text-xs ${cfg.color}`}
                         >
-                          <StatusIcon className="w-3 h-3 mr-1" />
-                          {sc.label}
+                          <Icon className="w-3 h-3 mr-1 inline" />
+                          {cfg.label}
                         </Badge>
                       </div>
-                      <p className="text-sm text-muted-foreground mt-0.5">
-                        Campaign:{" "}
-                        <span className="text-foreground font-medium">
-                          {req.campaign_name}
-                        </span>
+                      <p className="text-sm text-muted-foreground">
+                        Campaign: {req.campaign?.name ?? "—"}
                       </p>
-                      {req.agreed_rate > 0 && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          <DollarSign className="w-3 h-3 inline" /> Agreed rate:
-                          ${req.agreed_rate}
+                      {req.agreed_fee > 0 && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          <DollarSign className="w-3 h-3 inline" /> £
+                          {req.agreed_fee} agreed
                         </p>
                       )}
                       {req.due_date && (
@@ -684,94 +418,31 @@ export default function Influencers() {
                           Due: {new Date(req.due_date).toLocaleDateString()}
                         </p>
                       )}
-                      {req.message && (
-                        <p className="text-xs text-muted-foreground mt-1 italic line-clamp-1">
-                          "{req.message}"
-                        </p>
-                      )}
                     </div>
-
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {req.status === "pending" && (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="rounded-xl text-blue-600 border-blue-200 hover:bg-blue-50"
-                            onClick={() =>
-                              handleStatusChange(req.id, "accepted")
-                            }
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Mark
-                            Accepted
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="rounded-xl text-red-500 border-red-200 hover:bg-red-50"
-                            onClick={() =>
-                              handleStatusChange(req.id, "declined")
-                            }
-                          >
-                            <XCircle className="w-3.5 h-3.5 mr-1" /> Declined
-                          </Button>
-                        </>
-                      )}
-                      {req.status === "accepted" && (
-                        <Button
-                          size="sm"
-                          className="rounded-xl bg-gradient-to-r from-violet-500 to-primary hover:opacity-90"
-                          onClick={() => openUpload(req)}
-                        >
-                          <Upload className="w-3.5 h-3.5 mr-1" /> Upload
-                          Deliverable
-                        </Button>
-                      )}
-                      {req.status === "delivered" && (
-                        <>
-                          <a
-                            href={req.deliverable_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="rounded-xl"
-                            >
-                              <Paperclip className="w-3.5 h-3.5 mr-1" /> View
-                              File
-                            </Button>
-                          </a>
-                          <Button
-                            size="sm"
-                            className="rounded-xl bg-emerald-600 hover:bg-emerald-700"
-                            onClick={() =>
-                              handleStatusChange(req.id, "completed")
-                            }
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Mark
-                            Complete
-                          </Button>
-                        </>
-                      )}
-                      {req.status === "completed" && req.deliverable_url && (
-                        <a
-                          href={req.deliverable_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="rounded-xl"
-                          >
-                            <Paperclip className="w-3.5 h-3.5 mr-1" /> View
-                            Deliverable
-                          </Button>
-                        </a>
-                      )}
-                    </div>
+                    {req.status === "accepted" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-xl text-xs"
+                        onClick={() => {
+                          setSelectedRequest(req);
+                          setUploadOpen(true);
+                        }}
+                      >
+                        <Paperclip className="w-3 h-3 mr-1" /> Upload
+                        Deliverable
+                      </Button>
+                    )}
+                    {req.deliverable_url && (
+                      <a
+                        href={req.deliverable_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary hover:underline"
+                      >
+                        View Deliverable →
+                      </a>
+                    )}
                   </div>
                 );
               })}
@@ -780,7 +451,7 @@ export default function Influencers() {
         </TabsContent>
       </Tabs>
 
-      {/* INVITE DIALOG */}
+      {/* ── Invite Dialog ───────────────────────────────────────────────── */}
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -788,21 +459,21 @@ export default function Influencers() {
               Invite {selectedInfluencer?.full_name}
             </DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleInvite} className="space-y-4 mt-2">
+          <form onSubmit={handleSendInvite} className="space-y-4 mt-2">
             <div className="space-y-2">
-              <Label>Select Campaign *</Label>
+              <Label>Campaign *</Label>
               <Select
                 required
                 value={inviteForm.campaign_id}
-                onValueChange={(v: string) =>
+                onValueChange={(v) =>
                   setInviteForm((p) => ({ ...p, campaign_id: v }))
                 }
               >
                 <SelectTrigger className="rounded-xl">
-                  <SelectValue placeholder="Choose a campaign..." />
+                  <SelectValue placeholder="Select a campaign" />
                 </SelectTrigger>
                 <SelectContent>
-                  {campaigns.map((c) => (
+                  {campaigns.map((c: any) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.name}
                     </SelectItem>
@@ -810,9 +481,9 @@ export default function Influencers() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Agreed Rate ($)</Label>
+                <Label>Agreed Rate (£)</Label>
                 <Input
                   type="number"
                   value={inviteForm.agreed_rate}
@@ -823,7 +494,6 @@ export default function Influencers() {
                     }))
                   }
                   className="rounded-xl"
-                  placeholder="0"
                 />
               </div>
               <div className="space-y-2">
@@ -846,24 +516,23 @@ export default function Influencers() {
                   setInviteForm((p) => ({ ...p, message: e.target.value }))
                 }
                 rows={3}
+                placeholder="Tell them about the campaign…"
                 className="w-full rounded-xl border border-input bg-transparent px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                placeholder="Write your invite message..."
               />
             </div>
             <Button
               type="submit"
-              disabled={inviting || !inviteForm.campaign_id}
+              disabled={sendInviteMutation.isPending}
               className="w-full rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90"
             >
-              {inviting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                  Sending...
-                </>
+              {sendInviteMutation.isPending ? (
+                <span className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Sending…
+                </span>
               ) : (
                 <>
-                  <Send className="w-4 h-4 mr-2" />
-                  Send Invite
+                  <Send className="w-4 h-4 mr-2" /> Send Invite
                 </>
               )}
             </Button>
@@ -871,7 +540,7 @@ export default function Influencers() {
         </DialogContent>
       </Dialog>
 
-      {/* UPLOAD DIALOG */}
+      {/* ── Upload Deliverable Dialog ───────────────────────────────────── */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -882,48 +551,32 @@ export default function Influencers() {
           <form onSubmit={handleUpload} className="space-y-4 mt-2">
             <div className="bg-muted/50 rounded-xl p-3 text-sm">
               <p className="text-muted-foreground">
-                Collaboration with{" "}
+                Collab with{" "}
                 <strong className="text-foreground">
-                  {selectedRequest?.influencer_name}
+                  {selectedRequest?.influencer?.full_name}
                 </strong>
               </p>
               <p className="text-muted-foreground">
                 Campaign:{" "}
                 <strong className="text-foreground">
-                  {selectedRequest?.campaign_name}
+                  {selectedRequest?.campaign?.name}
                 </strong>
               </p>
             </div>
             <div className="space-y-2">
-              <Label>Upload File *</Label>
-              <div
-                className="border-2 border-dashed border-muted rounded-xl p-6 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all"
-                onClick={() =>
-                  document.getElementById("deliverable-upload")?.click()
-                }
-              >
-                <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-                {uploadFile ? (
-                  <p className="text-sm font-medium">{uploadFile.name}</p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Click to select file
-                    <br />
-                    <span className="text-xs">
-                      Images, videos, PDFs supported
-                    </span>
-                  </p>
-                )}
-              </div>
-              <input
-                id="deliverable-upload"
-                type="file"
-                className="hidden"
-                accept="image/*,video/*,.pdf"
+              <Label>Deliverable URL *</Label>
+              <Input
+                required
+                value={uploadUrl}
                 onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setUploadFile(e.target.files?.[0] || null)
+                  setUploadUrl(e.target.value)
                 }
+                placeholder="https://drive.google.com/…"
+                className="rounded-xl"
               />
+              <p className="text-xs text-muted-foreground">
+                Link to Google Drive, Dropbox, YouTube, etc.
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Notes (optional)</Label>
@@ -933,24 +586,23 @@ export default function Influencers() {
                   setUploadNotes(e.target.value)
                 }
                 rows={2}
+                placeholder="Any notes about this deliverable…"
                 className="w-full rounded-xl border border-input bg-transparent px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                placeholder="Any notes about this deliverable..."
               />
             </div>
             <Button
               type="submit"
-              disabled={uploading || !uploadFile}
+              disabled={uploading}
               className="w-full rounded-xl bg-gradient-to-r from-violet-500 to-primary hover:opacity-90"
             >
               {uploading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
-                  Uploading...
-                </>
+                <span className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Submitting…
+                </span>
               ) : (
                 <>
-                  <Upload className="w-4 h-4 mr-2" />
-                  Upload & Mark Delivered
+                  <Upload className="w-4 h-4 mr-2" /> Submit Deliverable
                 </>
               )}
             </Button>
@@ -958,84 +610,68 @@ export default function Influencers() {
         </DialogContent>
       </Dialog>
 
-      {/* DETAIL DIALOG */}
+      {/* ── Detail Dialog ───────────────────────────────────────────────── */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="font-heading">
-              {detailInfluencer?.full_name}
+              {selectedInfluencer?.full_name}
             </DialogTitle>
           </DialogHeader>
-          {detailInfluencer && (
+          {selectedInfluencer && (
             <div className="space-y-4 mt-2">
               <div className="flex items-center gap-4">
                 <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center font-heading font-bold text-primary text-2xl">
-                  {detailInfluencer.full_name?.[0]}
+                  {selectedInfluencer.full_name?.[0]}
                 </div>
                 <div>
                   <Badge
                     variant="secondary"
-                    className={`${nicheColors[detailInfluencer.niche] || "bg-muted"}`}
+                    className={
+                      nicheColors[selectedInfluencer.niche] ?? "bg-muted"
+                    }
                   >
-                    {detailInfluencer.niche}
+                    {selectedInfluencer.niche}
                   </Badge>
-                  {detailInfluencer.location && (
+                  {selectedInfluencer.location && (
                     <p className="text-sm text-muted-foreground mt-1">
                       <MapPin className="w-3 h-3 inline mr-1" />
-                      {detailInfluencer.location}
+                      {selectedInfluencer.location}
                     </p>
                   )}
-                  {detailInfluencer.email && (
-                    <p className="text-sm text-muted-foreground">
-                      {detailInfluencer.email}
-                    </p>
-                  )}
+                  <p className="text-sm text-muted-foreground">
+                    {selectedInfluencer.email}
+                  </p>
                 </div>
               </div>
-              {detailInfluencer.bio && (
+              {selectedInfluencer.bio && (
                 <p className="text-sm text-muted-foreground border-t pt-3">
-                  {detailInfluencer.bio}
+                  {selectedInfluencer.bio}
                 </p>
               )}
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-muted/50 rounded-xl p-3 text-center">
-                  <p className="font-bold">
-                    {formatFollowers(detailInfluencer.follower_count)}
+                  <p className="font-bold text-sm">
+                    {formatFollowers(selectedInfluencer.follower_count)}
                   </p>
                   <p className="text-xs text-muted-foreground">Followers</p>
                 </div>
                 <div className="bg-muted/50 rounded-xl p-3 text-center">
-                  <p className="font-bold">
-                    {detailInfluencer.engagement_rate
-                      ? `${detailInfluencer.engagement_rate}%`
-                      : "—"}
+                  <p className="font-bold text-sm">
+                    {selectedInfluencer.engagement_rate}%
                   </p>
                   <p className="text-xs text-muted-foreground">Engagement</p>
                 </div>
                 <div className="bg-muted/50 rounded-xl p-3 text-center">
-                  <p className="font-bold">
-                    {detailInfluencer.rate_per_post
-                      ? `$${detailInfluencer.rate_per_post}`
-                      : "—"}
+                  <p className="font-bold text-sm">
+                    £{selectedInfluencer.rate_per_post}
                   </p>
                   <p className="text-xs text-muted-foreground">Rate/Post</p>
                 </div>
               </div>
-              {detailInfluencer.platforms?.length > 0 && (
-                <div className="flex gap-2 flex-wrap">
-                  {detailInfluencer.platforms.map((p) => (
-                    <span
-                      key={p}
-                      className="bg-muted px-2 py-1 rounded-lg text-xs font-medium"
-                    >
-                      {platformIcons[p as Platform]} {p}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {detailInfluencer.portfolio_url && (
+              {selectedInfluencer.portfolio_url && (
                 <a
-                  href={detailInfluencer.portfolio_url}
+                  href={selectedInfluencer.portfolio_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm text-primary hover:underline block"
@@ -1047,7 +683,7 @@ export default function Influencers() {
                 className="w-full rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90"
                 onClick={() => {
                   setDetailOpen(false);
-                  openInvite(detailInfluencer);
+                  openInvite(selectedInfluencer);
                 }}
               >
                 <Send className="w-4 h-4 mr-2" /> Send Invite
