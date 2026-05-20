@@ -19,11 +19,14 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import ManageClients from "./pages/admin/ManageClients";
 import ManageInfluencers from "./pages/admin/ManageInfluencers";
 import AdminReports from "./pages/admin/AdminReports";
+import AdminSubscriptions from "./pages/admin/AdminSubscriptions";
+import AdminPayments from "./pages/admin/AdminPayments";
 import Influencers from "./pages/Influencers";
 import Payment from "./pages/Payment";
 import ClientDemo from "./pages/ClientDemo";
 import SignIn from "./pages/SignIn";
 import UserManagement from "./pages/admin/UserManagement";
+import AdminRegister from "./pages/AdminRegister";
 
 // Mock authentication hook for development
 const useMockAuth = () => {
@@ -86,6 +89,7 @@ const AuthenticatedApp = () => {
       <Route path="/signin" element={<SignIn />} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/influencers/register" element={<InfluencerRegister />} />
+      <Route path="/admin-register" element={<AdminRegister />} />
       <Route path="/payment" element={<Payment />} />
       <Route path="/demo" element={<ClientDemo />} />
       <Route element={<DashboardLayout />}>
@@ -99,6 +103,8 @@ const AuthenticatedApp = () => {
         <Route path="/admin/clients" element={<ManageClients />} />
         <Route path="/admin/influencers" element={<ManageInfluencers />} />
         <Route path="/admin/reports" element={<AdminReports />} />
+        <Route path="/admin/subscriptions" element={<AdminSubscriptions />} />
+        <Route path="/admin/payments" element={<AdminPayments />} />
         <Route path="/admin/users" element={<UserManagement />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />

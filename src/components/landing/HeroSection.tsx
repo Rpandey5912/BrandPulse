@@ -74,7 +74,7 @@ export default function HeroSection() {
                   className="h-14 px-8 text-base rounded-xl text-white hover:opacity-90 transition-opacity"
                   style={{ backgroundColor: "var(--primary)" }}
                 >
-                  Start Free Trial <ArrowRight className="ml-2 w-5 h-5" />
+                  Get Started <ArrowRight className="ml-2 w-5 h-5" />
                 </Button>
               </Link>
               <Link to="/pricing">
@@ -90,7 +90,7 @@ export default function HeroSection() {
             <div className="flex items-center gap-8 mt-10 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                3-month free trial
+                From £199/month
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-500" />

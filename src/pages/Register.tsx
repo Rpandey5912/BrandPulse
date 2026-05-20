@@ -3,6 +3,7 @@ import { useFormik } from "formik";
 import * as Yup from "yup";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { AuthAPI, setToken } from "@/lib/api";
+import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,10 +41,10 @@ const planDetails: Record<
   string,
   { name: string; price: string; sub: string; color: string }
 > = {
-  trial: { name: "Trial", price: "Free", sub: "Free for 3 months", color: "border-violet-500 bg-violet-50" },
-  silver: { name: "Silver", price: "£499/month", sub: "£499/month", color: "border-gray-200 bg-white" },
-  gold: { name: "Gold", price: "£999/month", sub: "£999/month", color: "border-gray-200 bg-white" },
-  platinum: { name: "Platinum", price: "£2499/month", sub: "£2499/month", color: "border-gray-200 bg-white" },
+  trial: { name: "Starter", price: "£199/month", sub: "£199/month", color: "border-violet-500 bg-violet-50" },
+  silver: { name: "Growth", price: "£499/month", sub: "£499/month", color: "border-gray-200 bg-white" },
+  gold: { name: "Scale", price: "£999/month", sub: "£999/month", color: "border-gray-200 bg-white" },
+  platinum: { name: "Accelerator", price: "£2499/month", sub: "£2499/month", color: "border-gray-200 bg-white" },
 };
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -89,6 +90,7 @@ export default function Register() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
+  const { checkAppState } = useAuth();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -130,6 +132,7 @@ export default function Register() {
       setToken(res.access_token);
       localStorage.setItem("userRole", res.user.role);
       localStorage.setItem("bp_platforms", JSON.stringify(formik.values.social_platforms));
+      await checkAppState();
 
       toast({ title: "Account created! Proceeding to payment..." });
       setConfirmOpen(false);
@@ -371,7 +374,7 @@ export default function Register() {
                 type="submit"
                 className="w-full h-12 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-semibold text-base shadow-md transition-all"
               >
-                Create Account & Start Free Trial
+                Create Account & Get Started
               </Button>
             </form>
 

@@ -28,14 +28,15 @@ async function apiFetch<T = any>(
     },
   });
 
-  const data = await res.json();
+  // 204 No Content and other empty responses have no body to parse
+  const contentType = res.headers.get("content-type") ?? "";
+  const hasBody = res.status !== 204 && res.headers.get("content-length") !== "0" && contentType.includes("application/json");
+  const data = hasBody ? await res.json() : null;
 
   if (!res.ok) {
-    // FastAPI validation errors come back as { detail: string | [...] }
-    const message =
-      typeof data.detail === "string"
-        ? data.detail
-        : (data.message ?? "API error");
+    const message = data
+      ? (typeof data.detail === "string" ? data.detail : (data.message ?? "API error"))
+      : `Request failed with status ${res.status}`;
     throw Object.assign(new Error(message), {
       response: data,
       status: res.status,
@@ -79,6 +80,13 @@ export const AuthAPI = {
     subscription_plan?: string;
     social_platforms?: string[];
   }) => post<AuthResponse>("/auth/register", payload),
+
+  adminRegister: (payload: {
+    name: string;
+    email: string;
+    password: string;
+    admin_key: string;
+  }) => post<AuthResponse>("/auth/admin-register", payload),
 
   login: (email: string, password: string) =>
     post<AuthResponse>("/auth/login", { email, password }),
@@ -193,7 +201,7 @@ export const InfluencersAPI = {
     follower_count?: number;
     engagement_rate?: number;
     rate_per_post?: number;
-    tenant_id: string;
+    tenant_id?: string;
     platforms?: { platform: string; handle?: string; followers?: number }[];
   }) => post<Influencer>("/influencers/register", body),
 };
@@ -313,6 +321,34 @@ export const AdminAPI = {
   createPlan: (body: any) => post<Plan>("/plans", body),
   updatePlan: (id: string, body: any) => put<Plan>(`/plans/${id}`, body),
   deletePlan: (id: string) => del(`/plans/${id}`),
+
+  // Subscriptions (admin view of ALL clients)
+  listSubscriptions: (params?: {
+    status?: string;
+    plan?: string;
+    client?: string;
+    page?: number;
+    per_page?: number;
+  }) => get<Paginated<AdminSubscription>>("/admin/subscriptions" + buildQuery(params)),
+  updateSubscription: (id: string, body: {
+    plan_id?: string;
+    billing_cycle?: "monthly" | "annually";
+    status?: string;
+  }) => patch<AdminSubscription>(`/admin/subscriptions/${id}`, body),
+  cancelSubscription: (id: string) =>
+    post<{ message: string }>(`/admin/subscriptions/${id}/cancel`, {}),
+
+  // Payments (admin view of ALL clients)
+  listPayments: (params?: {
+    status?: string;
+    client?: string;
+    date_from?: string;
+    date_to?: string;
+    page?: number;
+    per_page?: number;
+  }) => get<Paginated<AdminPayment>>("/admin/payments" + buildQuery(params)),
+  updatePaymentStatus: (id: string, status: "paid" | "failed" | "refunded") =>
+    patch<AdminPayment>(`/admin/payments/${id}/status`, { status }),
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -447,6 +483,33 @@ export interface AppPublicSettings {
   require_email_verification: boolean;
   supported_plans: string[];
   default_plan: string;
+}
+
+export interface AdminSubscription {
+  id: string;
+  tenant_id: string;
+  tenant?: Tenant;
+  plan_id: string;
+  plan?: Plan;
+  status: "active" | "pending_payment" | "cancelled" | "inactive";
+  billing_cycle?: "monthly" | "annually";
+  starts_at?: string;
+  ends_at?: string;
+  created_at?: string;
+}
+
+export interface AdminPayment {
+  id: string;
+  tenant_id?: string;
+  tenant?: Tenant;
+  subscription_id: string;
+  amount: number;
+  payment_method: string;
+  transaction_id?: string;
+  status: "paid" | "pending" | "failed" | "refunded";
+  paid_by?: string;
+  paid_at?: string;
+  created_at?: string;
 }
 
 // Standard paginated response shape from FastAPI

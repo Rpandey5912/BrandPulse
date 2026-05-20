@@ -68,7 +68,7 @@ const validationSchema = Yup.object({
   email: Yup.string()
     .email("Please enter a valid email address")
     .required("Email is required"),
-  tenant_id: Yup.string().required("Brand / Company ID is required"),
+  tenant_id: Yup.string().optional(),
   phone: Yup.string().test(
     "phone-optional",
     "Please enter a valid phone number",
@@ -167,7 +167,7 @@ export default function InfluencerRegister() {
     setConfirming(true);
     try {
       await InfluencersAPI.selfRegister({
-        tenant_id: submittedData.tenant_id,
+        ...(submittedData.tenant_id ? { tenant_id: submittedData.tenant_id } : {}),
         full_name: submittedData.full_name,
         email: submittedData.email,
         phone: submittedData.phone || undefined,
@@ -239,25 +239,11 @@ export default function InfluencerRegister() {
         </p>
 
         <form onSubmit={formik.handleSubmit} className="space-y-6">
-          {/* Brand ID — hidden if pre-filled from URL */}
-          {!tenantIdFromUrl && (
-            <div className="space-y-2">
-              <Label htmlFor="tenant_id">Brand / Company ID *</Label>
-              <Input
-                id="tenant_id"
-                name="tenant_id"
-                value={formik.values.tenant_id}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                placeholder="Enter the brand ID shared with you"
-                className={`rounded-xl h-11 ${fieldError("tenant_id") ? "border-red-500" : ""}`}
-              />
-              {fieldError("tenant_id") && (
-                <p className="text-xs text-red-500">{fieldError("tenant_id")}</p>
-              )}
-              <p className="text-xs text-muted-foreground">
-                Ask the brand to share their registration link, or enter the ID they provided.
-              </p>
+          {/* Brand ID — only shown when pre-filled via brand's shared link */}
+          {tenantIdFromUrl && (
+            <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary flex items-center gap-2">
+              <Check className="w-4 h-4 shrink-0" />
+              Registering for a specific brand. Your application will go directly to their dashboard.
             </div>
           )}
 

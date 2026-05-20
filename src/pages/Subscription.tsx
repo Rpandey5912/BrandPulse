@@ -35,17 +35,19 @@ export default function Subscription() {
     refetch: refetchSub,
   } = useQuery({
     queryKey: ["subscription"],
-    queryFn: () => SubscriptionAPI.current().then((r: any) => r.data),
+    queryFn: () => SubscriptionAPI.current().catch((e) => e?.status === 404 ? null : Promise.reject(e)),
     staleTime: 60_000,
+    retry: false,
   });
 
   const plans: any[] = plansData ?? [];
   const currentSub: any = subData ?? null;
-  const currentPlanSlug = tenant?.subscription_plan ?? "trial";
+  // Use slug from subscription's plan object if available, fall back to tenant field
+  const currentPlanSlug = currentSub?.plan?.slug ?? tenant?.subscription_plan ?? "trial";
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const upgradeMutation = useMutation({
-    mutationFn: (slug: string) => SubscriptionAPI.upgrade(slug),
+    mutationFn: (planId: string) => SubscriptionAPI.upgrade(planId),
     onSuccess: () => {
       toast({
         title: "Plan changed!",
@@ -95,6 +97,22 @@ export default function Subscription() {
   // Popular plan index (middle of list)
   const popularSlug = "gold";
 
+const PLAN_LABELS: Record<string, string> = {
+  trial: "Starter",
+  silver: "Growth",
+  gold: "Scale",
+  platinum: "Accelerator",
+};
+
+function displayPlanName(name: string, slug?: string): string {
+  if (slug && PLAN_LABELS[slug]) return PLAN_LABELS[slug];
+  // Also normalise old DB names in case the seed hasn't run yet
+  const map: Record<string, string> = {
+    Trial: "Starter", Silver: "Growth", Gold: "Scale", Platinum: "Accelerator",
+  };
+  return map[name] ?? name;
+}
+
   return (
     <div className="p-6 lg:p-8 space-y-8 pb-24 md:pb-8">
       {/* Header */}
@@ -127,7 +145,7 @@ export default function Subscription() {
             <div>
               <p className="text-muted-foreground text-xs">Plan</p>
               <p className="font-semibold capitalize">
-                {currentSub.plan?.name ?? currentPlanSlug}
+                {displayPlanName(currentSub.plan?.name ?? currentPlanSlug, currentSub.plan?.slug)}
               </p>
             </div>
             <div>
@@ -205,7 +223,7 @@ export default function Subscription() {
 
                 <div className="mb-4">
                   <h3 className="font-heading font-bold text-lg">
-                    {plan.name}
+                    {displayPlanName(plan.name, plan.slug)}
                   </h3>
                   <div className="mt-1">
                     <span className="text-3xl font-extrabold">
@@ -316,7 +334,7 @@ export default function Subscription() {
                 <Button
                   className="flex-1 rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90"
                   disabled={upgradeMutation.isPending}
-                  onClick={() => upgradeMutation.mutate(confirmPlan.slug)}
+                  onClick={() => upgradeMutation.mutate(confirmPlan.id)}
                 >
                   {upgradeMutation.isPending ? "Switching…" : "Confirm"}
                 </Button>

@@ -1,4 +1,11 @@
 import { useRef, useEffect } from "react";
+
+const PLAN_LABELS: Record<string, string> = {
+  trial: "Starter",
+  silver: "Growth",
+  gold: "Scale",
+  platinum: "Accelerator",
+};
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AdminAPI } from "@/lib/api";
 import { Link } from "react-router-dom";
@@ -30,7 +37,6 @@ function Counter({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    let start = 0;
     const duration = 1200;
     const step = (timestamp: number, startTime: number) => {
       const progress = Math.min((timestamp - startTime) / duration, 1);
@@ -59,7 +65,7 @@ function RingChart({ pct, color }: { pct: number; color: string }) {
         cy={26}
         r={r}
         fill="none"
-        stroke="rgba(255,255,255,0.1)"
+        stroke="rgba(0,0,0,0.08)"
         strokeWidth={5}
       />
       <circle
@@ -80,7 +86,7 @@ function RingChart({ pct, color }: { pct: number; color: string }) {
         textAnchor="middle"
         fontSize={10}
         fontWeight={700}
-        fill="#fff"
+        fill="#374151"
       >
         {pct}%
       </text>
@@ -123,7 +129,7 @@ function PlanBadge({ plan }: { plan: string }) {
           display: "inline-block",
         }}
       />
-      {plan}
+      {PLAN_LABELS[plan] ?? plan}
     </span>
   );
 }
@@ -208,7 +214,7 @@ export default function AdminDashboard() {
   // ── Queries ────────────────────────────────────────────────────────────────
   const { data: overview, isLoading: loadingOv } = useQuery({
     queryKey: ["admin-overview"],
-    queryFn: () => AdminAPI.overview().then((r: any) => r.data),
+    queryFn: () => AdminAPI.overview(),
     staleTime: 60_000,
   });
   const { data: clientsData, isLoading: loadingCl } = useQuery({
@@ -346,7 +352,7 @@ export default function AdminDashboard() {
           alignItems: "center",
           justifyContent: "center",
           height: "100vh",
-          background: "#0f0f1a",
+          background: "#f1f5f9",
         }}
       >
         <div style={{ textAlign: "center" }}>
@@ -361,7 +367,7 @@ export default function AdminDashboard() {
               margin: "0 auto 12px",
             }}
           />
-          <p style={{ color: "#555", fontSize: 12 }}>Loading platform data…</p>
+          <p style={{ color: "#64748b", fontSize: 12 }}>Loading platform data…</p>
         </div>
         <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
       </div>
@@ -372,9 +378,9 @@ export default function AdminDashboard() {
     <div
       style={{
         fontFamily: "'DM Sans','Inter',sans-serif",
-        background: "#0f0f1a",
+        background: "#f1f5f9",
         minHeight: "100vh",
-        color: "#e2e8f0",
+        color: "#1e293b",
       }}
     >
       <style>{`
@@ -382,20 +388,20 @@ export default function AdminDashboard() {
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
         @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
         .card-hover { transition: transform .2s, box-shadow .2s; }
-        .card-hover:hover { transform: translateY(-3px); box-shadow: 0 16px 40px rgba(0,0,0,0.4) !important; }
+        .card-hover:hover { transform: translateY(-3px); box-shadow: 0 16px 40px rgba(0,0,0,0.1) !important; }
         .action-btn { border:none; cursor:pointer; border-radius:8px; padding:5px 10px; font-size:11px; font-weight:600; font-family:inherit; transition:opacity .15s, transform .1s; display:inline-flex; align-items:center; gap:4px; }
         .action-btn:hover { opacity:.85; transform:scale(1.04); }
         .action-btn:active { transform:scale(.97); }
         ::-webkit-scrollbar { width:4px; height:4px; }
         ::-webkit-scrollbar-track { background:transparent; }
-        ::-webkit-scrollbar-thumb { background:#2a2a3e; border-radius:4px; }
+        ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:4px; }
       `}</style>
 
       {/* ── Header ── */}
       <div
         style={{
-          background: "rgba(255,255,255,0.03)",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          background: "rgba(255,255,255,0.85)",
+          borderBottom: "1px solid rgba(0,0,0,0.07)",
           padding: "18px 28px",
           display: "flex",
           alignItems: "center",
@@ -424,7 +430,7 @@ export default function AdminDashboard() {
                 fontWeight: 800,
                 letterSpacing: "-.02em",
                 margin: 0,
-                background: "linear-gradient(135deg,#e2e8f0,#94a3b8)",
+                background: "linear-gradient(135deg,#1e293b,#475569)",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
               }}
@@ -432,7 +438,7 @@ export default function AdminDashboard() {
               Admin Control Centre
             </h1>
           </div>
-          <p style={{ fontSize: 11, color: "#475569", margin: "3px 0 0 18px" }}>
+          <p style={{ fontSize: 11, color: "#64748b", margin: "3px 0 0 18px" }}>
             {moment().format("dddd, D MMMM YYYY")} · Platform overview
           </p>
         </div>
@@ -474,8 +480,8 @@ export default function AdminDashboard() {
               key={k.label}
               className="card-hover"
               style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.07)",
+                background: "#ffffff",
+                border: "1px solid rgba(0,0,0,0.07)",
                 borderRadius: 16,
                 padding: "18px 16px",
                 display: "flex",
@@ -484,6 +490,7 @@ export default function AdminDashboard() {
                 animation: `fadeUp .5s ease ${i * 0.06}s both`,
                 position: "relative",
                 overflow: "hidden",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
               }}
             >
               {/* Glow blob */}
@@ -528,7 +535,7 @@ export default function AdminDashboard() {
                   style={{
                     fontSize: 22,
                     fontWeight: 800,
-                    color: "#f1f5f9",
+                    color: "#1e293b",
                     letterSpacing: "-.02em",
                     lineHeight: 1,
                   }}
@@ -574,10 +581,11 @@ export default function AdminDashboard() {
         {Object.keys(planBreak).length > 0 && (
           <div
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.07)",
+              background: "#ffffff",
+              border: "1px solid rgba(0,0,0,0.07)",
               borderRadius: 16,
               padding: "20px 24px",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
             }}
           >
             <div
@@ -592,13 +600,13 @@ export default function AdminDashboard() {
                 style={{
                   fontSize: 13,
                   fontWeight: 700,
-                  color: "#cbd5e1",
+                  color: "#1e293b",
                   letterSpacing: "-.01em",
                 }}
               >
                 Plan Distribution
               </span>
-              <span style={{ fontSize: 11, color: "#475569" }}>
+              <span style={{ fontSize: 11, color: "#64748b" }}>
                 {ov.total_tenants ?? 0} total clients
               </span>
             </div>
@@ -660,17 +668,17 @@ export default function AdminDashboard() {
                     <span
                       style={{
                         fontSize: 11,
-                        color: "#94a3b8",
+                        color: "#64748b",
                         textTransform: "capitalize",
                       }}
                     >
-                      {slug}
+                      {PLAN_LABELS[slug] ?? slug}
                     </span>
                     <span
                       style={{
                         fontSize: 13,
                         fontWeight: 700,
-                        color: "#e2e8f0",
+                        color: "#1e293b",
                       }}
                     >
                       {count}
@@ -689,10 +697,11 @@ export default function AdminDashboard() {
           {/* Recent Clients */}
           <div
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.07)",
+              background: "#ffffff",
+              border: "1px solid rgba(0,0,0,0.07)",
               borderRadius: 16,
               overflow: "hidden",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
             }}
           >
             <div
@@ -701,13 +710,13 @@ export default function AdminDashboard() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                borderBottom: "1px solid rgba(255,255,255,0.05)",
+                borderBottom: "1px solid rgba(0,0,0,0.06)",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <Building2 size={15} color="#6366f1" />
                 <span
-                  style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}
+                  style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}
                 >
                   Recent Clients
                 </span>
@@ -751,7 +760,7 @@ export default function AdminDashboard() {
                       padding: "11px 22px",
                       borderBottom:
                         i < clients.length - 1
-                          ? "1px solid rgba(255,255,255,0.04)"
+                          ? "1px solid rgba(0,0,0,0.05)"
                           : "none",
                     }}
                   >
@@ -761,7 +770,7 @@ export default function AdminDashboard() {
                         style={{
                           fontSize: 13,
                           fontWeight: 600,
-                          color: "#e2e8f0",
+                          color: "#1e293b",
                           margin: 0,
                           whiteSpace: "nowrap",
                           overflow: "hidden",
@@ -773,7 +782,7 @@ export default function AdminDashboard() {
                       <p
                         style={{
                           fontSize: 11,
-                          color: "#475569",
+                          color: "#64748b",
                           margin: "2px 0 0",
                           whiteSpace: "nowrap",
                           overflow: "hidden",
@@ -804,10 +813,11 @@ export default function AdminDashboard() {
           {/* Pending Influencers */}
           <div
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.07)",
+              background: "#ffffff",
+              border: "1px solid rgba(0,0,0,0.07)",
               borderRadius: 16,
               overflow: "hidden",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
             }}
           >
             <div
@@ -816,13 +826,13 @@ export default function AdminDashboard() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                borderBottom: "1px solid rgba(255,255,255,0.05)",
+                borderBottom: "1px solid rgba(0,0,0,0.06)",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <ShieldAlert size={15} color="#f59e0b" />
                 <span
-                  style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}
+                  style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}
                 >
                   Pending Review
                 </span>
@@ -877,7 +887,7 @@ export default function AdminDashboard() {
                       padding: "10px 20px",
                       borderBottom:
                         i < pending.length - 1
-                          ? "1px solid rgba(255,255,255,0.04)"
+                          ? "1px solid rgba(0,0,0,0.05)"
                           : "none",
                     }}
                   >
@@ -887,7 +897,7 @@ export default function AdminDashboard() {
                         style={{
                           fontSize: 12,
                           fontWeight: 600,
-                          color: "#e2e8f0",
+                          color: "#1e293b",
                           margin: 0,
                           whiteSpace: "nowrap",
                           overflow: "hidden",
@@ -899,7 +909,7 @@ export default function AdminDashboard() {
                       <p
                         style={{
                           fontSize: 10,
-                          color: "#475569",
+                          color: "#64748b",
                           margin: "2px 0 0",
                         }}
                       >
@@ -975,14 +985,15 @@ export default function AdminDashboard() {
               <div
                 className="card-hover"
                 style={{
-                  background: "rgba(255,255,255,0.03)",
-                  border: "1px solid rgba(255,255,255,0.07)",
+                  background: "#ffffff",
+                  border: "1px solid rgba(0,0,0,0.07)",
                   borderRadius: 14,
                   padding: "16px 18px",
                   display: "flex",
                   alignItems: "center",
                   gap: 12,
                   cursor: "pointer",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
                 }}
               >
                 <div
@@ -1004,7 +1015,7 @@ export default function AdminDashboard() {
                     style={{
                       fontSize: 12,
                       fontWeight: 600,
-                      color: "#cbd5e1",
+                      color: "#1e293b",
                       margin: 0,
                     }}
                   >
@@ -1013,7 +1024,7 @@ export default function AdminDashboard() {
                   <p
                     style={{
                       fontSize: 10,
-                      color: "#475569",
+                      color: "#64748b",
                       margin: "2px 0 0",
                       display: "flex",
                       alignItems: "center",

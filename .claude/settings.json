@@ -6,7 +6,13 @@
       "Read(//d/brandpulse-fastapi/**)",
       "Bash(Get-ChildItem -Path \"c:\\\\brandpulse\" -Directory)",
       "Bash(Select-Object Name)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(Get-ChildItem -Path \"c:\\\\brandpulse\\\\src\\\\pages\\\\admin\\\\\" -File)"
+    ],
+    "additionalDirectories": [
+      "D:\\brandpulse-fastapi\\app\\routers",
+      "D:\\brandpulse-fastapi\\app\\schemas",
+      "D:\\brandpulse-fastapi\\app"
     ]
   }
 }

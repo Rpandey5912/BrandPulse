@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from "react";
+import { useState, useRef, useEffect, type ChangeEvent } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AdminAPI } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -12,13 +12,8 @@ import {
   Trash2,
   Plus,
   Eye,
+  Pencil,
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -52,6 +47,13 @@ const planClass: Record<SubscriptionPlan, string> = {
   trial: "bg-muted text-muted-foreground",
 };
 
+const PLAN_LABELS: Record<string, string> = {
+  trial: "Starter",
+  silver: "Growth",
+  gold: "Scale",
+  platinum: "Accelerator",
+};
+
 const EMPTY_FORM = {
   company_name: "",
   contact_name: "",
@@ -63,6 +65,91 @@ const EMPTY_FORM = {
   password: "",
 };
 
+function ClientActionsMenu({
+  client,
+  onView,
+  onEdit,
+  onBlock,
+  onUnblock,
+  onDelete,
+}: {
+  client: any;
+  onView: () => void;
+  onEdit: () => void;
+  onBlock: () => void;
+  onUnblock: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="rounded-xl h-8 w-8"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <MoreVertical className="w-4 h-4" />
+      </Button>
+      {open && (
+        <div className="absolute right-0 top-9 z-50 min-w-[160px] rounded-lg border bg-popover p-1 shadow-md">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+            onClick={() => { setOpen(false); onView(); }}
+          >
+            <Eye className="w-4 h-4" /> View Details
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+            onClick={() => { setOpen(false); onEdit(); }}
+          >
+            <Pencil className="w-4 h-4" /> Edit Client
+          </button>
+          {client.instance_status === "blocked" ? (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+              onClick={() => { setOpen(false); onUnblock(); }}
+            >
+              <ShieldCheck className="w-4 h-4" /> Unblock
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+              onClick={() => { setOpen(false); onBlock(); }}
+            >
+              <ShieldOff className="w-4 h-4" /> Block
+            </button>
+          )}
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+            onClick={() => { setOpen(false); onDelete(); }}
+          >
+            <Trash2 className="w-4 h-4" /> Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ManageClients() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -71,8 +158,10 @@ export default function ManageClients() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [selected, setSelected] = useState<any>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [editForm, setEditForm] = useState(EMPTY_FORM);
 
   // ── Queries ────────────────────────────────────────────────────────────────
   const { data, isLoading } = useQuery({
@@ -161,9 +250,32 @@ export default function ManageClients() {
       }),
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: any }) =>
+      AdminAPI.updateClient(id, body),
+    onSuccess: () => {
+      toast({ title: "Client updated!" });
+      invalidate();
+      setEditOpen(false);
+    },
+    onError: (e: any) =>
+      toast({
+        title: "Error",
+        description: e?.response?.message ?? e.message,
+        variant: "destructive",
+      }),
+  });
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     await createMutation.mutateAsync(form);
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selected) return;
+    const { password: _pw, ...rest } = editForm;
+    await updateMutation.mutateAsync({ id: selected.id, body: rest });
   };
 
   if (isLoading) {
@@ -260,7 +372,7 @@ export default function ManageClients() {
                         variant="secondary"
                         className={`capitalize text-xs ${planClass[client.subscription_plan as SubscriptionPlan] ?? "bg-muted"}`}
                       >
-                        {client.subscription_plan}
+                        {PLAN_LABELS[client.subscription_plan] ?? client.subscription_plan}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
@@ -275,46 +387,27 @@ export default function ManageClients() {
                       {moment(client.created_at).format("D MMM YYYY")}
                     </td>
                     <td className="px-4 py-3">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-xl h-8 w-8"
-                          >
-                            <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setSelected(client);
-                              setDetailOpen(true);
-                            }}
-                          >
-                            <Eye className="w-4 h-4 mr-2" /> View Details
-                          </DropdownMenuItem>
-                          {client.instance_status === "blocked" ? (
-                            <DropdownMenuItem
-                              onClick={() => unblockMutation.mutate(client.id)}
-                            >
-                              <ShieldCheck className="w-4 h-4 mr-2" /> Unblock
-                            </DropdownMenuItem>
-                          ) : (
-                            <DropdownMenuItem
-                              onClick={() => blockMutation.mutate(client.id)}
-                            >
-                              <ShieldOff className="w-4 h-4 mr-2" /> Block
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem
-                            className="text-destructive"
-                            onClick={() => deleteMutation.mutate(client.id)}
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" /> Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <ClientActionsMenu
+                        client={client}
+                        onView={() => { setSelected(client); setDetailOpen(true); }}
+                        onEdit={() => {
+                          setSelected(client);
+                          setEditForm({
+                            company_name: client.company_name ?? "",
+                            contact_name: client.contact_name ?? "",
+                            email: client.email ?? "",
+                            phone: client.phone ?? "",
+                            industry: client.industry ?? "",
+                            website: client.website ?? "",
+                            subscription_plan: client.subscription_plan ?? "trial",
+                            password: "",
+                          });
+                          setEditOpen(true);
+                        }}
+                        onBlock={() => blockMutation.mutate(client.id)}
+                        onUnblock={() => unblockMutation.mutate(client.id)}
+                        onDelete={() => deleteMutation.mutate(client.id)}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -464,6 +557,111 @@ export default function ManageClients() {
         </DialogContent>
       </Dialog>
 
+      {/* Edit Client Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Edit Client</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEdit} className="space-y-4 mt-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Company Name *</Label>
+                <Input
+                  required
+                  value={editForm.company_name}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setEditForm((p) => ({ ...p, company_name: e.target.value }))
+                  }
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Contact Name</Label>
+                <Input
+                  value={editForm.contact_name}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setEditForm((p) => ({ ...p, contact_name: e.target.value }))
+                  }
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email *</Label>
+              <Input
+                required
+                type="email"
+                value={editForm.email}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setEditForm((p) => ({ ...p, email: e.target.value }))
+                }
+                className="rounded-xl"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Phone</Label>
+                <Input
+                  value={editForm.phone}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setEditForm((p) => ({ ...p, phone: e.target.value }))
+                  }
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Industry</Label>
+                <Input
+                  value={editForm.industry}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setEditForm((p) => ({ ...p, industry: e.target.value }))
+                  }
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Website</Label>
+              <Input
+                value={editForm.website}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setEditForm((p) => ({ ...p, website: e.target.value }))
+                }
+                className="rounded-xl"
+                placeholder="https://"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Plan</Label>
+              <Select
+                value={editForm.subscription_plan}
+                onValueChange={(v: SubscriptionPlan) =>
+                  setEditForm((p) => ({ ...p, subscription_plan: v }))
+                }
+              >
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="trial">Starter (Trial)</SelectItem>
+                  <SelectItem value="silver">Growth (£499/mo)</SelectItem>
+                  <SelectItem value="gold">Scale (£999/mo)</SelectItem>
+                  <SelectItem value="platinum">Accelerator (£2499/mo)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              type="submit"
+              disabled={updateMutation.isPending}
+              className="w-full rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90"
+            >
+              {updateMutation.isPending ? "Saving…" : "Save Changes"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -486,7 +684,7 @@ export default function ManageClients() {
                     { label: "Phone", value: detailData.phone },
                     { label: "Industry", value: detailData.industry },
                     { label: "Website", value: detailData.website },
-                    { label: "Plan", value: detailData.subscription_plan },
+                    { label: "Plan", value: PLAN_LABELS[detailData.subscription_plan] ?? detailData.subscription_plan },
                     { label: "Status", value: detailData.instance_status },
                     { label: "Campaigns", value: detailData.campaigns_count },
                     {

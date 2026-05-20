@@ -18,7 +18,7 @@ const plans: Plan[] = [
   {
     name: "Starter",
     price: "£199",
-    period: "3 months",
+    period: "/month",
     description: "Perfect to explore our platform",
     features: [
       "2 social media platforms",
@@ -27,7 +27,7 @@ const plans: Plan[] = [
       "Email support",
       "Up to 3 campaigns",
     ],
-    cta: "Start Free Trial",
+    cta: "Get Started",
     popular: false,
     planKey: "trial",
   },
@@ -73,7 +73,7 @@ const plans: Plan[] = [
     period: "/month",
     description: "For enterprise brands",
     features: [
-      "All Gold features",
+      "All Scale features",
       "White-label reports",
       "Custom API integrations",
       "Multi-brand management",
@@ -105,8 +105,7 @@ export default function PricingSection() {
             Choose Your Growth Plan
           </h2>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            Start with a free 3-month trial. Upgrade anytime as your brand
-            scales.
+            Start with our Starter plan at £199/month. Upgrade anytime as your brand scales.
           </p>
         </motion.div>
 

@@ -14,6 +14,7 @@ import {
   Shield,
   Globe,
   UserCircle,
+  DollarSign,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -38,6 +39,9 @@ const adminLinks = [
   { to: "/admin", label: "Admin Dashboard", icon: Shield },
   { to: "/admin/clients", label: "Manage Clients", icon: Users },
   { to: "/admin/influencers", label: "Influencers", icon: Globe },
+  { to: "/admin/subscriptions", label: "Subscriptions", icon: CreditCard },
+  { to: "/admin/payments", label: "Payments", icon: DollarSign },
+  { to: "/admin/reports", label: "All Reports", icon: FileText },
   { to: "/admin/users", label: "User Management", icon: UserCircle },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
@@ -137,7 +141,7 @@ export default function DashboardLayout() {
                       {user?.email}
                     </p>
                     <p className="text-xs text-primary capitalize mt-0.5">
-                      {user?.role}
+                      {user?.role === "user" ? "Client" : user?.role}
                     </p>
                   </div>
                 )}

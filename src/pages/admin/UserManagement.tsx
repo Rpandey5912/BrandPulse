@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ChangeEvent } from "react";
+import { useState, useRef, useEffect, type FormEvent, type ChangeEvent } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AdminAPI } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -21,19 +21,13 @@ import {
 import {
   Search,
   UserPlus,
-  Mail,
   Shield,
   User,
   MoreVertical,
   Trash2,
   ToggleLeft,
+  Pencil,
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/ui/use-toast";
 import moment from "moment";
 
@@ -41,6 +35,70 @@ const roleClass = {
   admin: "bg-violet-500/10 text-violet-600",
   user: "bg-blue-500/10 text-blue-600",
 };
+
+function UserActionsMenu({
+  user,
+  onEdit,
+  onToggle,
+  onDelete,
+}: {
+  user: any;
+  onEdit: () => void;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="rounded-xl h-8 w-8"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <MoreVertical className="w-4 h-4" />
+      </Button>
+      {open && (
+        <div className="absolute right-0 top-9 z-50 min-w-[160px] rounded-lg border bg-popover p-1 shadow-md">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+            onClick={() => { setOpen(false); onEdit(); }}
+          >
+            <Pencil className="w-4 h-4" /> Edit Role
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+            onClick={() => { setOpen(false); onToggle(); }}
+          >
+            <ToggleLeft className="w-4 h-4" />
+            {user.is_active ? "Deactivate" : "Activate"}
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors"
+            onClick={() => { setOpen(false); onDelete(); }}
+          >
+            <Trash2 className="w-4 h-4" /> Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const EMPTY_FORM = {
   name: "",
@@ -59,6 +117,9 @@ export default function UserManagement() {
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editUser, setEditUser] = useState<any>(null);
+  const [editRole, setEditRole] = useState<"admin" | "user">("user");
 
   // ── Queries ────────────────────────────────────────────────────────────────
   const { data, isLoading } = useQuery({
@@ -131,6 +192,18 @@ export default function UserManagement() {
         description: e?.response?.message ?? e.message,
         variant: "destructive",
       }),
+  });
+
+  const updateRoleMutation = useMutation({
+    mutationFn: ({ id, role }: { id: string; role: string }) =>
+      AdminAPI.updateUser(id, { role }),
+    onSuccess: () => {
+      toast({ title: "Role updated!" });
+      invalidate();
+      setEditOpen(false);
+    },
+    onError: (e: any) =>
+      toast({ title: "Error", description: e?.response?.message ?? e.message, variant: "destructive" }),
   });
 
   const handleCreate = async (e: FormEvent) => {
@@ -289,31 +362,12 @@ export default function UserManagement() {
                         : "—"}
                     </td>
                     <td className="px-4 py-3">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="rounded-xl h-8 w-8"
-                          >
-                            <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => toggleMutation.mutate(user.id)}
-                          >
-                            <ToggleLeft className="w-4 h-4 mr-2" />
-                            {user.is_active ? "Deactivate" : "Activate"}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-destructive"
-                            onClick={() => deleteMutation.mutate(user.id)}
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" /> Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      <UserActionsMenu
+                        user={user}
+                        onEdit={() => { setEditUser(user); setEditRole(user.role); setEditOpen(true); }}
+                        onToggle={() => toggleMutation.mutate(user.id)}
+                        onDelete={() => deleteMutation.mutate(user.id)}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -352,6 +406,34 @@ export default function UserManagement() {
           )}
         </div>
       )}
+
+      {/* Edit Role Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-heading">Edit Role — {editUser?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select value={editRole} onValueChange={(v: "admin" | "user") => setEditRole(v)}>
+                <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">Client (User)</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              className="w-full rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90"
+              disabled={updateRoleMutation.isPending}
+              onClick={() => editUser && updateRoleMutation.mutate({ id: editUser.id, role: editRole })}
+            >
+              {updateRoleMutation.isPending ? "Saving…" : "Save Changes"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Create User Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

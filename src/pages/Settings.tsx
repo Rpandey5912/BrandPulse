@@ -269,8 +269,8 @@ export default function Settings() {
         )}
       </div>
 
-      {/* Subscription info */}
-      {tenant && (
+      {/* Subscription info — clients only */}
+      {tenant && user?.role !== "admin" && (
         <div className="bg-card rounded-2xl border p-6">
           <h2 className="font-heading font-bold mb-3">Subscription</h2>
           <div className="flex items-center gap-3">
